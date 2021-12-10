@@ -4,6 +4,7 @@ import copy
 import pendulum
 import singer
 from singer import metadata, metrics, utils
+from jinja2 import Template
 import time
 
 from tap_mssql.connection import (
@@ -98,8 +99,8 @@ class log_based_sync:
                 table_is_change_tracking_enabled = True
             else:
                 raise Exception(
-                    "Cannot sync stream using log-based replication. Change tracking is not enabled for table: {}"
-                ).format(self.schema_table)
+                    f"Cannot sync stream using log-based replication. Change tracking is not enabled for table: {self.table_name}"
+                )
 
         return table_is_change_tracking_enabled  # this should be the table name?
 
@@ -174,6 +175,13 @@ class log_based_sync:
 
         return current_log_version
 
+    def _get_non_key_properties(self, key_properties):
+        """Returns all selected columns excluding key properties"""
+        selected_columns = [
+            column for column in self.columns if column not in key_properties
+        ]
+        return selected_columns
+
     def log_based_initial_full_table(self):
         "Determine if we should run a full load of the table or use state."
 
@@ -198,7 +206,13 @@ class log_based_sync:
     def execute_log_based_sync(self):
         "Confirm we have state and run a log based query. This will be larger."
 
+        self.logger.debug(f"Catalog Entry: {self.catalog_entry}")
+
         key_properties = common.get_key_properties(self.catalog_entry)
+
+        # At least 1 key property is required to execute a log based sync.
+        if not key_properties:
+            raise ValueError(f"Expected at least 1 key property column in the config, got {key_properties}.")
 
         ct_sql_query = self._build_ct_sql_query(key_properties)
         self.logger.info("Executing log-based query: {}".format(ct_sql_query))
@@ -268,63 +282,55 @@ class log_based_sync:
             singer.write_message(singer.StateMessage(value=copy.deepcopy(self.state)))
 
     def _build_ct_sql_query(self, key_properties):
-
-        # make this a separate function?
-        # key_properties = common.get_key_properties(self.catalog_entry)
-        selected_columns = [
-            column for column in self.columns if column not in key_properties
-        ]
-        # if no primary keys, skip with error
-        # "No primary key(s) found, must have a primary key to replicate")
-        key_join_list = []
-        for key in key_properties:
-            # primary_key_join_string = "c.{}={}.{}.{}".format(
-            #     key, self.schema_name, self.table_name, key
-            # )
-            primary_key_join_string = "c.{}=st.{}".format(key, key)
-            key_join_list.append(primary_key_join_string)
-
-        select_clause = (
-            "select c.sys_change_version, c.sys_change_operation, tc.commit_time"
-        )
-
-        select_key_columns_clause = ",c.{}".format(",c.".join(key_properties))
-
-        select_added_columns_clause = ",st.{}".format(",st.".join(selected_columns))
-
-        from_clause = " FROM CHANGETABLE (CHANGES {}.{}, {}) as c ".format(
-            self.schema_name, self.table_name, self.current_log_version - 1
-        )
-
-        source_table_join_clause = "LEFT JOIN {}.{} as st ON {}".format(
-            self.schema_name, self.table_name, " AND ".join(key_join_list)
-        )
-        commit_table_join_clause = """
-            left join sys.dm_tran_commit_table tc
-            on c.sys_change_version = tc.commit_ts
+        """Using Selected columns, return an SQL query to select updated records from Change Tracking"""
+        # Order column list in alphabetical order starting with key_properties then other columns
+        selected_columns = self._get_non_key_properties(key_properties)
+        self.logger.debug(
+            f"""
+            sql_template Render Values:
+            key_properties = {key_properties}
+            selected_columns = {selected_columns}
+            schema_name = {self.schema_name}
+            table_name = {self.table_name}
+            current_log_version = {self.current_log_version - 1}
             """
-
-        order_by_clause = "order by c.sys_change_version"
-
-        sql_query = """
-        {}
-        {}
-        {}
-        {}
-        {}
-        {}
-        {}
-        """.format(
-            select_clause,
-            select_key_columns_clause,
-            select_added_columns_clause,
-            from_clause,
-            source_table_join_clause,
-            commit_table_join_clause,
-            order_by_clause,
         )
 
-        return sql_query
+        sql_template = Template(
+            """
+            select
+                 c.sys_change_version
+                ,c.sys_change_operation
+                ,tc.commit_time
+                {% for property in key_properties %}
+                ,c.{{ property }}
+                {% endfor %}
+                {% for column in selected_columns %}
+                ,st.{{ column }}
+                {% endfor %}
+            from CHANGETABLE (CHANGES {{ schema_name }}.{{ table_name }}, {{ current_log_version }}) as c
+                LEFT JOIN {{ schema_name }}.{{ table_name }} as st ON (
+                    1 = 1
+                    {% for property in key_properties %}
+                    AND c.{{ property }} = st.{{ property }}
+                    {% endfor %}
+                )
+                LEFT JOIN sys.dm_tran_commit_table tc ON (
+                    c.sys_change_version = tc.commit_ts
+                )
+            ORDER BY c.sys_change_version
+            """
+        )
+
+        return sql_template.render(
+            {
+                'key_properties': key_properties,
+                'selected_columns': selected_columns,
+                'schema_name': self.schema_name,
+                'table_name': self.table_name,
+                'current_log_version': self.current_log_version - 1
+            }
+        )
 
     def _get_single_result(self, sql_query, column):
         """
