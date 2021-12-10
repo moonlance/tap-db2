@@ -53,6 +53,7 @@ logger.setLevel(logging.INFO)
 
 STRING_TYPES = set(
     [
+        "binary",
         "char",
         "enum",
         "longtext",
@@ -62,6 +63,7 @@ STRING_TYPES = set(
         "uniqueidentifier",
         "nvarchar",
         "nchar",
+        "varbinary",
     ]
 )
 
