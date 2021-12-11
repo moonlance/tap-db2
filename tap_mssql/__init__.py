@@ -553,6 +553,7 @@ def do_sync_log_based_table(mssql_conn, config, catalog_entry, state, columns):
         state = singer.write_bookmark(
             state, catalog_entry.tap_stream_id, "initial_full_table_complete", True
         )
+
         state = singer.write_bookmark(
             state,
             catalog_entry.tap_stream_id,
