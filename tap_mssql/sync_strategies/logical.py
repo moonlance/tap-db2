@@ -172,7 +172,7 @@ class log_based_sync:
         sql_query = "SELECT current_version = CHANGE_TRACKING_CURRENT_VERSION()"
 
         current_log_version = self._get_single_result(sql_query, "current_version")
-        
+
         return current_log_version
 
     def _get_non_key_properties(self, key_properties):
@@ -187,15 +187,20 @@ class log_based_sync:
 
         min_valid_version = self._get_min_valid_version()
 
-        if self.current_log_version is None: # prevents the operator in the else statement from erroring if None 
+        if (
+            self.current_log_version is None or not self.initial_full_table_complete
+        ):  # prevents the operator in the else statement from erroring if None
             self.current_log_version = self._get_current_log_version()
-            self.logger.info("executing a full table sync.")
+            self.logger.info(
+                "No previous valid state found, executing a full table sync."
+            )
             return True
         else:
             min_version_out_of_date = min_valid_version > self.current_log_version
 
             if (
-                self.initial_full_table_complete == True and min_version_out_of_date == True
+                self.initial_full_table_complete == True
+                and min_version_out_of_date == True
             ):
                 self.logger.info(
                     "CHANGE_TRACKING_MIN_VALID_VERSION has reported a value greater than current-log-version. Executing a full table sync."
@@ -213,7 +218,9 @@ class log_based_sync:
 
         # At least 1 key property is required to execute a log based sync.
         if not key_properties:
-            raise ValueError(f"Expected at least 1 key property column in the config, got {key_properties}.")
+            raise ValueError(
+                f"Expected at least 1 key property column in the config, got {key_properties}."
+            )
 
         ct_sql_query = self._build_ct_sql_query(key_properties)
         self.logger.info("Executing log-based query: {}".format(ct_sql_query))
@@ -325,11 +332,11 @@ class log_based_sync:
 
         return sql_template.render(
             {
-                'key_properties': key_properties,
-                'selected_columns': selected_columns,
-                'schema_name': self.schema_name,
-                'table_name': self.table_name,
-                'current_log_version': self.current_log_version - 1
+                "key_properties": key_properties,
+                "selected_columns": selected_columns,
+                "schema_name": self.schema_name,
+                "table_name": self.table_name,
+                "current_log_version": self.current_log_version - 1,
             }
         )
 
@@ -343,5 +350,5 @@ class log_based_sync:
             row = results.fetchone()
 
             single_result = row[column]
-        
+
         return single_result
