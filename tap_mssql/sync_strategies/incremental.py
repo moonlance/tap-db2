@@ -49,8 +49,10 @@ def sync_table(mssql_conn, config, catalog_entry, state, columns):
         state, catalog_entry.tap_stream_id, "version", stream_version
     )
 
+    table_stream = common.set_schema_mapping(config, catalog_entry.stream)
+
     activate_version_message = singer.ActivateVersionMessage(
-        stream=catalog_entry.stream, version=stream_version
+        stream=table_stream, version=stream_version
     )
 
     singer.write_message(activate_version_message)
@@ -75,5 +77,5 @@ def sync_table(mssql_conn, config, catalog_entry, state, columns):
             select_sql += ' ORDER BY "{}" ASC'.format(replication_key_metadata)
 
         common.sync_query(
-            open_conn, catalog_entry, state, select_sql, columns, stream_version, params
+            open_conn, catalog_entry, state, select_sql, columns, stream_version, table_stream, params
         )
