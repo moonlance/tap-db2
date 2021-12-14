@@ -271,6 +271,7 @@ class log_based_sync:
                     record_message = common.row_to_singer_record(
                         self.catalog_entry,
                         stream_version,
+                        table_stream,
                         ordered_row,
                         desired_columns,
                         time_extracted,
