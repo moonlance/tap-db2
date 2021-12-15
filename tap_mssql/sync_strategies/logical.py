@@ -267,7 +267,8 @@ class log_based_sync:
 
                         desired_columns.append("_sdc_deleted_at")
                         ordered_row.append(None)
-
+                        
+                    table_stream = self.catalog_entry.stream.replace('-', '_')
                     record_message = common.row_to_singer_record(
                         self.catalog_entry,
                         stream_version,
