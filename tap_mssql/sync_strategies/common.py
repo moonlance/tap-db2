@@ -23,12 +23,14 @@ def escape(string):
         )
     return '"' + string + '"'
 
-def set_schema_mapping(config, stream): 
+
+def set_schema_mapping(config, stream):
     schema_mapping = config.get("include_schemas_in_destination_stream_name")
 
     if schema_mapping:
-        stream = stream.replace('-', '_')
+        stream = stream.replace("-", "_")
     return stream
+
 
 def generate_tap_stream_id(table_schema, table_name):
     return table_schema + "-" + table_name
@@ -100,7 +102,9 @@ def generate_select_sql(catalog_entry, columns):
     return select_sql
 
 
-def row_to_singer_record(catalog_entry, version, table_stream, row, columns, time_extracted):
+def row_to_singer_record(
+    catalog_entry, version, table_stream, row, columns, time_extracted
+):
     row_to_persist = ()
     md_map = metadata.to_map(catalog_entry.metadata)
     md_map[("properties", "_sdc_deleted_at")] = {
@@ -164,7 +168,14 @@ def whitelist_bookmark_keys(bookmark_key_set, tap_stream_id, state):
 
 
 def sync_query(
-    cursor, catalog_entry, state, select_sql, columns, stream_version, table_stream, params
+    cursor,
+    catalog_entry,
+    state,
+    select_sql,
+    columns,
+    stream_version,
+    table_stream,
+    params,
 ):
     replication_key = singer.get_bookmark(
         state, catalog_entry.tap_stream_id, "replication_key"
@@ -190,7 +201,12 @@ def sync_query(
             counter.increment()
             rows_saved += 1
             record_message = row_to_singer_record(
-                catalog_entry, stream_version, table_stream, row, columns, time_extracted
+                catalog_entry,
+                stream_version,
+                table_stream,
+                row,
+                columns,
+                time_extracted,
             )
             singer.write_message(record_message)
             md_map = metadata.to_map(catalog_entry.metadata)

@@ -10,6 +10,8 @@ import tap_mssql.sync_strategies.common as common
 from tap_mssql.connection import (
     connect_with_backoff,
     get_azure_sql_engine,
+    modify_ouput_converter,
+    revert_ouput_converter,
 )
 
 LOGGER = singer.get_logger()
@@ -66,9 +68,22 @@ def sync_table(mssql_conn, config, catalog_entry, state, columns, stream_version
 
         params = {}
 
+        if catalog_entry.tap_stream_id == "dbo-InputMetadata":
+            prev_converter = modify_ouput_converter(open_conn)
+
         common.sync_query(
-            open_conn, catalog_entry, state, select_sql, columns, stream_version, table_stream, params
+            open_conn,
+            catalog_entry,
+            state,
+            select_sql,
+            columns,
+            stream_version,
+            table_stream,
+            params,
         )
+
+        if catalog_entry.tap_stream_id == "dbo-InputMetadata":
+            revert_ouput_converter(open_conn, prev_converter)
 
     # clear max pk value and last pk fetched upon successful sync
     singer.clear_bookmark(state, catalog_entry.tap_stream_id, "max_pk_values")

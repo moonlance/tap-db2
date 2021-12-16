@@ -45,7 +45,12 @@ Column = collections.namedtuple(
     ],
 )
 
-REQUIRED_CONFIG_KEYS = ["host", "database", "user", "password"]
+REQUIRED_CONFIG_KEYS = [
+    "host",
+    "database",
+    "user",
+    "password",
+]
 
 LOGGER = singer.get_logger()
 logger = logging.getLogger(__name__)
@@ -247,19 +252,18 @@ def discover_catalog(mssql_conn, config):
             md_map = metadata.write(md_map, (), "database-name", table_schema)
 
             is_view = table_info[table_schema][table_name]["is_view"]
-             
+
             if table_schema in table_info and table_name in table_info[table_schema]:
                 row_count = table_info[table_schema][table_name].get("row_count")
 
                 if row_count is not None:
                     md_map = metadata.write(md_map, (), "row-count", row_count)
 
-                md_map = metadata.write(md_map, (), "is-view", is_view) 
+                md_map = metadata.write(md_map, (), "is-view", is_view)
 
             key_properties = [c.column_name for c in cols if c.is_primary_key == 1]
 
             md_map = metadata.write(md_map, (), "table-key-properties", key_properties)
- 
 
             entry = CatalogEntry(
                 table=table_name,
@@ -468,7 +472,7 @@ def write_schema_message(config, catalog_entry, bookmark_properties=[]):
     key_properties = common.get_key_properties(catalog_entry)
 
     table_stream = common.set_schema_mapping(config, catalog_entry.stream)
- 
+
     singer.write_message(
         singer.SchemaMessage(
             stream=table_stream,
@@ -482,7 +486,7 @@ def write_schema_message(config, catalog_entry, bookmark_properties=[]):
 def do_sync_incremental(mssql_conn, config, catalog_entry, state, columns):
     md_map = metadata.to_map(catalog_entry.metadata)
     stream_version = common.get_stream_version(catalog_entry.tap_stream_id, state)
-    
+
     replication_key = md_map.get((), {}).get("replication-key")
     write_schema_message(
         config, catalog_entry=catalog_entry, bookmark_properties=[replication_key]
@@ -497,7 +501,7 @@ def do_sync_full_table(mssql_conn, config, catalog_entry, state, columns):
     key_properties = common.get_key_properties(catalog_entry)
 
     write_schema_message(config, catalog_entry)
-    
+
     stream_version = common.get_stream_version(catalog_entry.tap_stream_id, state)
 
     full_table.sync_table(

@@ -32,6 +32,29 @@ def connect_with_backoff(connection):
     return connection
 
 
+def decode_sketchy_utf16(raw_bytes):
+    """Updates the output handling where malformed unicode is received from MSSQL"""
+    s = raw_bytes.decode("utf-16le", "ignore")
+    try:
+        n = s.index("\u0000")
+        s = s[:n]  # respect null terminator
+    except ValueError:
+        pass
+    return s
+
+
+def modify_ouput_converter(conn):
+
+    prev_converter = conn.connection.get_output_converter(pyodbc.SQL_WVARCHAR)
+    conn.connection.add_output_converter(pyodbc.SQL_WVARCHAR, decode_sketchy_utf16)
+
+    return prev_converter
+
+
+def revert_ouput_converter(conn, prev_converter):
+    conn.connection.add_output_converter(pyodbc.SQL_WVARCHAR, prev_converter)
+
+
 def get_azure_sql_engine(config) -> Engine:
     """The All-Purpose SQL connection object for the Azure Data Warehouse."""
 

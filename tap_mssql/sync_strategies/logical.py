@@ -10,6 +10,8 @@ import time
 from tap_mssql.connection import (
     connect_with_backoff,
     get_azure_sql_engine,
+    modify_ouput_converter,
+    revert_ouput_converter,
 )
 import tap_mssql.sync_strategies.common as common
 
@@ -229,6 +231,10 @@ class log_based_sync:
             self.catalog_entry.tap_stream_id, self.state
         )
         with self.mssql_conn.connect() as open_conn:
+
+            if self.catalog_entry.tap_stream_id == "dbo-InputMetadata":
+                prev_converter = modify_ouput_converter(open_conn)
+
             results = open_conn.execute(ct_sql_query)
 
             row = results.fetchone()
@@ -267,8 +273,8 @@ class log_based_sync:
 
                         desired_columns.append("_sdc_deleted_at")
                         ordered_row.append(None)
-                        
-                    table_stream = self.catalog_entry.stream.replace('-', '_')
+
+                    table_stream = self.catalog_entry.stream.replace("-", "_")
                     record_message = common.row_to_singer_record(
                         self.catalog_entry,
                         stream_version,
@@ -290,6 +296,9 @@ class log_based_sync:
                     row = results.fetchone()
 
             singer.write_message(singer.StateMessage(value=copy.deepcopy(self.state)))
+
+            if self.catalog_entry.tap_stream_id == "dbo-InputMetadata":
+                revert_ouput_converter(open_conn, prev_converter)
 
     def _build_ct_sql_query(self, key_properties):
         """Using Selected columns, return an SQL query to select updated records from Change Tracking"""
