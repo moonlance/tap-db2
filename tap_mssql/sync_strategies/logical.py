@@ -261,7 +261,7 @@ class log_based_sync:
                             self.logger.warn(
                                 "Found deleted record with no timestamp, falling back to current time."
                             )
-                            ordered_row.append(time_extracted)
+                            ordered_row.append(str(time_extracted))
                         else:
                             ordered_row.append(row["commit_time"])
 
