@@ -7,13 +7,13 @@ from singer import metadata, metrics, utils
 from jinja2 import Template
 import time
 
-from tap_mssql.connection import (
+from tap_db2.connection import (
     connect_with_backoff,
     get_azure_sql_engine,
     modify_ouput_converter,
     revert_ouput_converter,
 )
-import tap_mssql.sync_strategies.common as common
+import tap_db2.sync_strategies.common as common
 
 LOGGER = singer.get_logger()
 

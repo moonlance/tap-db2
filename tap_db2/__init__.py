@@ -20,12 +20,12 @@ from singer import utils
 from singer.schema import Schema
 from singer.catalog import Catalog, CatalogEntry
 
-import tap_mssql.sync_strategies.common as common
-import tap_mssql.sync_strategies.full_table as full_table
-import tap_mssql.sync_strategies.incremental as incremental
-import tap_mssql.sync_strategies.logical as logical
+import tap_db2.sync_strategies.common as common
+import tap_db2.sync_strategies.full_table as full_table
+import tap_db2.sync_strategies.incremental as incremental
+import tap_db2.sync_strategies.logical as logical
 
-from tap_mssql.connection import (
+from tap_db2.connection import (
     connect_with_backoff,
     get_azure_sql_engine,
 )
@@ -77,6 +77,7 @@ BYTES_FOR_INTEGER_TYPE = {
     "smallint": 2,
     "mediumint": 3,
     "int": 4,
+    "integer": 4,
     "real": 4,
     "bigint": 8,
 }
@@ -92,7 +93,7 @@ VARIANT_TYPES = set(["json"])
 
 def schema_for_column(c):
     """Returns the Schema object for the given Column."""
-    data_type = c.data_type.lower()
+    data_type = c.data_type.strip().lower()
 
     inclusion = "available"
 
@@ -151,7 +152,7 @@ def create_column_metadata(cols):
             schema.inclusion != "unsupported",
         )
         mdata = metadata.write(
-            mdata, ("properties", c.column_name), "sql-datatype", c.data_type.lower()
+            mdata, ("properties", c.column_name), "sql-datatype", c.data_type.strip().lower()
         )
 
     return metadata.to_list(mdata)
@@ -170,7 +171,7 @@ def discover_catalog(mssql_conn, config):
         table_schema_clause = "WHERE c.table_schema IN ({})".format(filter_dbs_clause)
     else:
         table_schema_clause = """
-        WHERE c.table_schema NOT IN (
+        WHERE q.table_schema NOT IN (
         'information_schema',
         'performance_schema',
         'sys'
@@ -179,14 +180,21 @@ def discover_catalog(mssql_conn, config):
     with mssql_conn.connect() as open_conn:
         LOGGER.info("Fetching tables")
         tables_results = open_conn.execute(
-            """SELECT table_schema,
-                table_name,
-                table_type
-            FROM information_schema.tables c
-            {}
-        """.format(
-                table_schema_clause
+            """
+            SELECT
+                TABSCHEMA AS TABLE_SCHEMA,
+                TABNAME AS TABLE_NAME,
+                TYPE AS TABLE_TYPE
+            FROM SYSCAT.TABLES t
+            WHERE t.TABSCHEMA NOT IN (
+                'SYSTOOLS',
+                'SYSIBM',
+                'SYSCAT',
+                'SYSPUBLIC',
+                'SYSSTAT',
+                'SYSIBMADM'
             )
+            """
         )
         table_info = {}
 
@@ -195,43 +203,31 @@ def discover_catalog(mssql_conn, config):
                 table_info[db] = {}
 
             table_info[db][table] = {"row_count": None, "is_view": table_type == "VIEW"}
+            LOGGER.info(table_info)
         LOGGER.info("Tables fetched, fetching columns")
         column_results = open_conn.execute(
-            """with constraint_columns as (
-                select c.table_schema
-                , c.table_name
-                , c.column_name
-
-                from information_schema.constraint_column_usage c
-
-                join information_schema.table_constraints tc
-                        on tc.table_schema = c.table_schema
-                        and tc.table_name = c.table_name
-                        and tc.constraint_name = c.constraint_name
-                        and tc.constraint_type in ('PRIMARY KEY'))
-                SELECT c.table_schema,
-                    c.table_name,
-                    c.column_name,
-                    data_type,
-                    case when character_maximum_length = -1 then 65535 else character_maximum_length end as character_maximum_length,
-                    numeric_precision,
-                    numeric_scale,
-                    case when cc.column_name is null then 0 else 1 end
-                FROM information_schema.columns c
-
-                left join constraint_columns cc
-                    on cc.table_name = c.table_name
-                    and cc.table_schema = c.table_schema
-                    and cc.column_name = c.column_name
-
-                {}
-                ORDER BY c.table_schema, c.table_name
-        """.format(
-                table_schema_clause
-            )
+            """
+            SELECT
+                t.TABSCHEMA AS TABLE_SCHEMA,
+                t.TABNAME AS TABLE_NAME,
+                s.NAME AS COLUMN_NAME,
+                s.COLTYPE AS DATA_TYPE,
+                s.LENGTH AS CHARACTER_MAXIMUM_LENGTH,
+                s.LONGLENGTH AS NUMERIC_PRECISION,
+                s.SCALE AS NUMERIC_SCALE,
+                CASE
+                    WHEN s.KEYSEQ IS NOT NULL THEN 1
+                    ELSE 0
+                END AS IS_PRIMARY_KEY
+            FROM SYSIBM.SYSCOLUMNS s
+            LEFT JOIN SYSCAT.TABLES t 
+            ON s.TBNAME = t.TABNAME 
+            WHERE t.TABSCHEMA NOT LIKE 'SYS%'
+            """
         )
         columns = []
         rec = column_results.fetchone()
+        LOGGER.info(rec)
         while rec is not None:
             columns.append(Column(*rec))
             rec = column_results.fetchone()
