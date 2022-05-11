@@ -68,7 +68,7 @@ def sync_table(mssql_conn, config, catalog_entry, state, columns):
             ):
                 replication_key_value = pendulum.parse(replication_key_value)
 
-            select_sql += ' WHERE "{}" >= ? ORDER BY "{}" ASC'.format(
+            select_sql += ' WHERE "{}" > ? ORDER BY "{}" ASC'.format(
                 replication_key_metadata, replication_key_metadata
             )
 
