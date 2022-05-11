@@ -202,7 +202,11 @@ def discover_catalog(mssql_conn, config):
             if db not in table_info:
                 table_info[db] = {}
 
-            table_info[db][table] = {"row_count": None, "is_view": table_type == "VIEW"}
+            table_info[db][table] = {
+                "row_count": None,
+                "is_view": table_type == "V"
+            }
+
             LOGGER.info(table_info)
         LOGGER.info("Tables fetched, fetching columns")
         column_results = open_conn.execute(
@@ -220,8 +224,8 @@ def discover_catalog(mssql_conn, config):
                     ELSE 0
                 END AS IS_PRIMARY_KEY
             FROM SYSIBM.SYSCOLUMNS s
-            LEFT JOIN SYSCAT.TABLES t 
-            ON s.TBNAME = t.TABNAME 
+            LEFT JOIN SYSCAT.TABLES t
+            ON s.TBNAME = t.TABNAME
             WHERE t.TABSCHEMA NOT LIKE 'SYS%'
             """
         )
@@ -249,8 +253,12 @@ def discover_catalog(mssql_conn, config):
 
             is_view = table_info[table_schema][table_name]["is_view"]
 
-            if table_schema in table_info and table_name in table_info[table_schema]:
-                row_count = table_info[table_schema][table_name].get("row_count")
+            if table_schema in table_info and table_name in table_info[
+                table_schema
+            ]:
+                row_count = table_info[table_schema][table_name].get(
+                    "row_count"
+                )
 
                 if row_count is not None:
                     md_map = metadata.write(md_map, (), "row-count", row_count)
@@ -597,11 +605,14 @@ def sync_non_binlog_streams(mssql_conn, non_binlog_catalog, config, state):
                 f"No replication key for {catalog_entry.table}, using full table replication"
             )
             replication_method = "FULL_TABLE"
-        if replication_method == "INCREMENTAL" and not primary_keys:
-            LOGGER.info(
-                f"No primary key for {catalog_entry.table}, using full table replication"
-            )
-            replication_method = "FULL_TABLE"
+        # Removing conditional check for primary keys - if a replication key
+        # is already specified, we can allow incremental loads on views
+        
+        # if replication_method == "INCREMENTAL" and not primary_keys:
+        #     LOGGER.info(
+        #         f"No primary key for {catalog_entry.table}, using full table replication"
+        #     )
+        #     replication_method = "FULL_TABLE"
         LOGGER.info(f"Table {catalog_entry.table} will use {replication_method} sync")
 
         database_name = common.get_database_name(catalog_entry)
