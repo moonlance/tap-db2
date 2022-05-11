@@ -10,7 +10,7 @@ from sqlalchemy.engine import Engine
 import singer
 # import ssl
 
-from urllib.parse import quote_plus
+# from urllib.parse import quote_plus
 
 LOGGER = singer.get_logger()
 
@@ -60,32 +60,14 @@ def revert_ouput_converter(conn, prev_converter):
 def get_azure_sql_engine(config) -> Engine:
     """The All-Purpose SQL connection object for the Azure Data Warehouse."""
 
-#     conn_values = {
-#         "prefix": "ibm_db_sa+pyodbc",
-#         "username": config["user"],
-#         "password": quote_plus(config["password"]),
-#         "port": config["port"],
-#         "host": config["host"],
-#         # "driver": "DB2",
-#         "database": config["database"],
-#     }
-
-#     # conn_values["authentication"] = "SqlPassword"
-# #     raw_conn_string = "{prefix}{username}:{password}@{host}:\
-# # {port}/{database}?driver={driver}&Authentication={authentication}&\
-# # autocommit=True&IntegratedSecurity=False"
-#     raw_conn_string = "{}://{}:{}@{}:{}/{}".format(
-#         conn_values["prefix"],
-#         conn_values["username"],
-#         conn_values["password"],
-#         conn_values["port"],
-#         conn_values["host"],
-#         # conn_values["driver"],
-#         conn_values["database"],
-#     )
-
-#     engine = create_engine(raw_conn_string.format(**conn_values))
-#     return engine
-    connection_string = "ibm_db_sa+pyodbc://db2inst1:ADMIN@localhost:50000/TESTDB"
+    # connection_string = "ibm_db_sa+pyodbc://db2inst1:*
+    # @localhost:50000/TESTDB"
+    connection_string = "ibm_db_sa+pyodbc://{}:{}@{}:{}/{}".format(
+        config["username"],
+        config["password"],
+        config["hostname"],
+        config["port"],
+        config["database"],
+    )
     engine = create_engine(connection_string)
     return engine
