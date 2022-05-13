@@ -45,10 +45,11 @@ Column = collections.namedtuple(
 )
 
 REQUIRED_CONFIG_KEYS = [
-    "host",
-    "database",
-    "user",
+    "username",
     "password",
+    "hostname",
+    "port",
+    "database",
 ]
 
 LOGGER = singer.get_logger()
