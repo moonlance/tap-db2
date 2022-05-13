@@ -15,15 +15,16 @@ setup(
     py_modules=["tap_db2"],
     install_requires=[
         "attrs==21.4.0",
-        "pendulum==1.2.0",
+        "backoff==1.8.0",
+        "ibm-db-sa==0.3.7",
+        "ibm-db==3.1.1",
+        "jinja2==2.11.3",
         "markupsafe<2.1.0",
+        "pendulum==1.2.0",
+        "pyodbc==4.0.26",
+        "pytz>=2018.1",
         "singer-python==5.9.0",
         "sqlalchemy<2.0.0",
-        "pyodbc==4.0.26",
-        "ibm-db==3.1.1",
-        "ibm-db-sa==0.3.7",
-        "backoff==1.8.0",
-        "jinja2==2.11.3",
     ],
     entry_points="""
           [console_scripts]
