@@ -1,0 +1,144 @@
+{
+    "streams": [
+        {
+            "tap_stream_id": "VOLCANOVIEW",
+            "stream": "VOLCANOVIEW",
+            "schema": {
+                "type": [
+                    "null",
+                    "object"
+                ],
+                "additionalProperties": False,
+                "properties": {
+                    "TO-DO: id": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "TO-DO: date_modified": {
+                        "type": [
+                            "null",
+                            "string"
+                        ],
+                        "format": "date-time"
+                    }
+                }
+            },
+            "metadata": [
+                {
+                    "metadata": {
+                        "inclusion": "available",
+                        "table-key-properties": [
+                            "id"
+                        ],
+                        "selected": True,
+                        "valid-replication-keys": [
+                            "date_modified"
+                        ],
+                        "schema-name": "users"
+                    },
+                    "breadcrumb": []
+                },
+                {
+                    "metadata": {
+                        "inclusion": "automatic"
+                    },
+                    "breadcrumb": [
+                        "properties",
+                        "id"
+                    ]
+                },
+                {
+                    "metadata": {
+                        "inclusion": "available",
+                        "selected": True
+                    },
+                    "breadcrumb": [
+                        "properties",
+                        "name"
+                    ]
+                },
+                {
+                    "metadata": {
+                        "inclusion": "automatic"
+                    },
+                    "breadcrumb": [
+                        "properties",
+                        "date_modified"
+                    ]
+                }
+            ]
+        },
+        {
+            "tap_stream_id": "VOLCANO",
+            "stream": "VOLCANO",
+            "schema": {
+                "type": [
+                    "null",
+                    "object"
+                ],
+                "additionalProperties": False,
+                "properties": {
+                    "TO-DO: id": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "TO-DO: date_modified": {
+                        "type": [
+                            "null",
+                            "string"
+                        ],
+                        "format": "date-time"
+                    }
+                }
+            },
+            "metadata": [
+                {
+                    "metadata": {
+                        "inclusion": "available",
+                        "table-key-properties": [
+                            "id"
+                        ],
+                        "selected": True,
+                        "valid-replication-keys": [
+                            "date_modified"
+                        ],
+                        "schema-name": "users"
+                    },
+                    "breadcrumb": []
+                },
+                {
+                    "metadata": {
+                        "inclusion": "automatic"
+                    },
+                    "breadcrumb": [
+                        "properties",
+                        "id"
+                    ]
+                },
+                {
+                    "metadata": {
+                        "inclusion": "available",
+                        "selected": True
+                    },
+                    "breadcrumb": [
+                        "properties",
+                        "name"
+                    ]
+                },
+                {
+                    "metadata": {
+                        "inclusion": "automatic"
+                    },
+                    "breadcrumb": [
+                        "properties",
+                        "date_modified"
+                    ]
+                }
+            ]
+        }
+    ]
+}
