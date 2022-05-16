@@ -60,9 +60,14 @@ class StreamDb2(SQLStream):
                 object_name,
                 object_type,
             ) in result_objects.fetchall():
-                objects[object_name] = {
-                    "is_view": object_type == "V",
-                    "schema": schema,
+                if schema not in objects:
+                    objects[schema] = {}
+                objects[schema][object_name] = {
+                    "type": "view" if object_type == "V" else "table",
+                    "stream": object_name,
+                    "tap_stream_id": object_name,
+                    "properties": {}
+                    # "schema": schema,
                 }
 
             LOGGER.info(objects)
@@ -71,9 +76,9 @@ class StreamDb2(SQLStream):
             result_columns = connection.execute(
                 """
                 SELECT
-                    t.TABSCHEMA AS TABLE_SCHEMA,
-                    t.TABNAME AS TABLE_NAME,
-                    s.NAME AS COLUMN_NAME,
+                    t.TABSCHEMA AS schema,
+                    t.TABNAME AS OBJECT_NAME,
+                    s.NAME AS column,
                     s.COLTYPE AS DATA_TYPE,
                     s.LENGTH AS CHARACTER_MAXIMUM_LENGTH,
                     s.LONGLENGTH AS NUMERIC_POSITION,
@@ -89,69 +94,92 @@ class StreamDb2(SQLStream):
                 """
             )
 
-            streams = {}
             for (
-                table_schema,
-                table_name,
-                column_name,
+                schema,
+                object_name,
+                column,
                 data_type,
                 character_maximum_length,
                 numeric_position,
                 numeric_scale,
                 is_primary_key,
             ) in result_columns.fetchall():
-                if table_name not in streams:
-                    streams[table_name] = {}
-                LOGGER.info(
-                    f"Fetched {table_schema}.{table_name}.{column_name}"
-                )
-
-                stream = {
-                    "tap_stream_id": table_name,
-                    "stream": table_name,
-                    "schema": {
-                        "type": ["null", "object"],
-                        "additionalProperties": False,
-                        "properties": {
-                            "TO-DO: id": {
-                                "type": ["null", "string"],
-                            },
-                            "TO-DO: date_modified": {
-                                "type": ["null", "string"],
-                                "format": "date-time",
-                            },
-                        },
-                    },
-                    "metadata": [
-                        {
-                            "metadata": {
-                                "inclusion": "available",
-                                "table-key-properties": ["id"],
-                                "selected": True,
-                                "valid-replication-keys": ["date_modified"],
-                                "schema-name": "users",
-                            },
-                            "breadcrumb": [],
-                        },
-                        {
-                            "metadata": {"inclusion": "automatic"},
-                            "breadcrumb": ["properties", "id"],
-                        },
-                        {
-                            "metadata": {
-                                "inclusion": "available",
-                                "selected": True,
-                            },
-                            "breadcrumb": ["properties", "name"],
-                        },
-                        {
-                            "metadata": {"inclusion": "automatic"},
-                            "breadcrumb": ["properties", "date_modified"],
-                        },
-                    ],
+                LOGGER.info(f"objects: {objects}")
+                if column not in objects[schema][object_name]["properties"]:
+                    objects[schema][object_name]["properties"][column] = {}
+                objects[schema][object_name]["properties"][column] = {
+                    "type": data_type,
+                    "character_maximum_length": character_maximum_length,
+                    "numeric_position": numeric_position,
+                    "numeric_scale": numeric_scale,
+                    "is_primary_key": is_primary_key,
                 }
 
-                streams[table_name] = stream
+            LOGGER.info(f"objects: {objects}")
+            LOGGER.info("Fetched columns. Forming schema...")
+
+            for (schema, stream) in objects.items():
+                for (name, info) in stream.items():
+                    LOGGER.info(f"{name}: {info}")
+                    stream = {
+                        "schema": {
+                            "type": ["null", "object"],
+                            "additionalProperties": False,
+                        }
+                    }
+
+            # TO-DO
+            return objects
+
+            # stream = {
+            #     "tap_stream_id": object_name,
+            #     "stream": object_name,
+            #     "schema": {
+            #         "type": ["null", "object"],
+            #         "additionalProperties": False,
+            #         "properties": objects[schema][object_name][
+            #             "properties"
+            #         ],
+            #         # {
+            #         #     "TO-DO: id": {
+            #         #         "type": ["null", "string"],
+            #         #     },
+            #         #     "TO-DO: date_modified": {
+            #         #         "type": ["null", "string"],
+            #         #         "format": "date-time",
+            #         #     },
+            #         # },
+            #     },
+            #     "metadata": [
+            #         {
+            #             "metadata": {
+            #                 "inclusion": "available",
+            #                 "table-key-properties": ["id"],
+            #                 "selected": True,
+            #                 "valid-replication-keys": ["date_modified"],
+            #                 "schema-name": "users",
+            #             },
+            #             "breadcrumb": [],
+            #         },
+            #         {
+            #             "metadata": {"inclusion": "automatic"},
+            #             "breadcrumb": ["properties", "id"],
+            #         },
+            #         {
+            #             "metadata": {
+            #                 "inclusion": "available",
+            #                 "selected": True,
+            #             },
+            #             "breadcrumb": ["properties", "name"],
+            #         },
+            #         {
+            #             "metadata": {"inclusion": "automatic"},
+            #             "breadcrumb": ["properties", "date_modified"],
+            #         },
+            #     ],
+            # }
+
+            # streams[object_name] = stream
 
             # catalog_entries["streams"].append(
             #     {
@@ -170,6 +198,6 @@ class StreamDb2(SQLStream):
             #     }
             # )
 
-            output = {"streams": list(streams.values())}
-            LOGGER.info(f"output = {output}")
-            return output
+            # output = {"streams": list(streams.values())}
+            # LOGGER.info(f"output = {output}")
+            # return output
