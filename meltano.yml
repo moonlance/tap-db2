@@ -1,0 +1,32 @@
+version: 1
+send_anonymous_usage_stats: true
+project_id: f6853c4b-faaf-4180-92b0-e1a19d41e2be
+plugins:
+  extractors:
+    - name: tap-db2
+      namespace: tap_db2
+      pip_url: -e .
+      capabilities:
+        - state
+        - catalog
+        - discover
+      settings:
+        - name: username
+        - name: password
+          kind: password
+        - name: hostname
+        - name: port
+        - name: database
+        - name: start_date
+          value: "2010-01-01T00:00:00Z"
+      config:
+        username: db2inst1
+        password: ADMIN
+        hostname: localhost
+        port: 50000
+        database: TESTDB
+        start_date: "2010-01-01T00:00:00Z"
+  loaders:
+    - name: target-jsonl
+      variant: andyh1203
+      pip_url: target-jsonl
