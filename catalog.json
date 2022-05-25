@@ -1,0 +1,234 @@
+{
+  "streams": [
+    {
+      "tap_stream_id": "TOM     -VOLCANOVIEW",
+      "table_name": "VOLCANOVIEW",
+      "schema": {
+        "properties": {
+          "COUNTRY": {
+            "inclusion": "available",
+            "maxLength": 50,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "HOLOCENEVOLCANOES": {
+            "inclusion": "available",
+            "minimum": -2147483648,
+            "maximum": 2147483647,
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "Active since1800 CE": {
+            "inclusion": "available",
+            "minimum": -2147483648,
+            "maximum": 2147483647,
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "Currently Erupting (17 March 2022)": {
+            "inclusion": "available",
+            "maxLength": 64,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "Active since1960 CE": {
+            "inclusion": "available",
+            "minimum": -2147483648,
+            "maximum": 2147483647,
+            "type": [
+              "null",
+              "integer"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "stream": "VOLCANOVIEW",
+      "metadata": [
+        {
+          "breadcrumb": [],
+          "metadata": {
+            "selected-by-default": false,
+            "database-name": "TOM     ",
+            "is-view": true,
+            "table-key-properties": []
+          }
+        },
+        {
+          "breadcrumb": [
+            "properties",
+            "COUNTRY"
+          ],
+          "metadata": {
+            "selected-by-default": true,
+            "sql-datatype": "varchar"
+          }
+        },
+        {
+          "breadcrumb": [
+            "properties",
+            "HOLOCENEVOLCANOES"
+          ],
+          "metadata": {
+            "selected-by-default": true,
+            "sql-datatype": "integer"
+          }
+        },
+        {
+          "breadcrumb": [
+            "properties",
+            "Active since1800 CE"
+          ],
+          "metadata": {
+            "selected-by-default": true,
+            "sql-datatype": "integer"
+          }
+        },
+        {
+          "breadcrumb": [
+            "properties",
+            "Currently Erupting (17 March 2022)"
+          ],
+          "metadata": {
+            "selected-by-default": true,
+            "sql-datatype": "varchar"
+          }
+        },
+        {
+          "breadcrumb": [
+            "properties",
+            "Active since1960 CE"
+          ],
+          "metadata": {
+            "selected-by-default": true,
+            "sql-datatype": "integer"
+          }
+        }
+      ]
+    },
+    {
+      "tap_stream_id": "TOM     -VOLCANO",
+      "table_name": "VOLCANO",
+      "schema": {
+        "properties": {
+          "COUNTRY": {
+            "inclusion": "automatic",
+            "maxLength": 50,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "HOLOCENEVOLCANOES": {
+            "inclusion": "available",
+            "minimum": -2147483648,
+            "maximum": 2147483647,
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "Active since1800 CE": {
+            "inclusion": "available",
+            "minimum": -2147483648,
+            "maximum": 2147483647,
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "Active since1960 CE": {
+            "inclusion": "available",
+            "minimum": -2147483648,
+            "maximum": 2147483647,
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "Currently Erupting (17 March 2022)": {
+            "inclusion": "available",
+            "maxLength": 64,
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "stream": "VOLCANO",
+      "metadata": [
+        {
+          "breadcrumb": [],
+          "metadata": {
+            "selected-by-default": false,
+            "database-name": "TOM     ",
+            "is-view": false,
+            "table-key-properties": [
+              "COUNTRY"
+            ]
+          }
+        },
+        {
+          "breadcrumb": [
+            "properties",
+            "COUNTRY"
+          ],
+          "metadata": {
+            "selected-by-default": true,
+            "sql-datatype": "varchar"
+          }
+        },
+        {
+          "breadcrumb": [
+            "properties",
+            "HOLOCENEVOLCANOES"
+          ],
+          "metadata": {
+            "selected-by-default": true,
+            "sql-datatype": "integer"
+          }
+        },
+        {
+          "breadcrumb": [
+            "properties",
+            "Active since1800 CE"
+          ],
+          "metadata": {
+            "selected-by-default": true,
+            "sql-datatype": "integer"
+          }
+        },
+        {
+          "breadcrumb": [
+            "properties",
+            "Active since1960 CE"
+          ],
+          "metadata": {
+            "selected-by-default": true,
+            "sql-datatype": "integer"
+          }
+        },
+        {
+          "breadcrumb": [
+            "properties",
+            "Currently Erupting (17 March 2022)"
+          ],
+          "metadata": {
+            "selected-by-default": true,
+            "sql-datatype": "varchar"
+          }
+        }
+      ]
+    }
+  ]
+}

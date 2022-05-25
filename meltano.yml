@@ -20,11 +20,6 @@ plugins:
         - name: start_date
           value: "2010-01-01T00:00:00Z"
       config:
-        username: db2inst1
-        password: ADMIN
-        hostname: localhost
-        port: 50000
-        database: TESTDB
         start_date: "2010-01-01T00:00:00Z"
   loaders:
     - name: target-jsonl

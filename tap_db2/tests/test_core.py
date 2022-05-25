@@ -4,7 +4,7 @@ import datetime
 
 from singer_sdk.testing import get_standard_tap_tests
 
-from tap_db2.tap import TapDb2
+from tap_db2.tap import Db2Tap
 
 SAMPLE_CONFIG = {
     "username": "db2inst1",
@@ -22,7 +22,7 @@ SAMPLE_CONFIG = {
 # Run standard built-in tap tests from the SDK:
 def test_standard_tap_tests():
     """Run standard tap tests from the SDK."""
-    tests = get_standard_tap_tests(TapDb2, config=SAMPLE_CONFIG)
+    tests = get_standard_tap_tests(Db2Tap, config=SAMPLE_CONFIG)
     for test in tests:
         test()
 
