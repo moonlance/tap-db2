@@ -31,6 +31,20 @@ class Db2Connector(SQLConnector):
             config["database"],
         )
 
+    def create_sqlalchemy_engine(self) -> sqlalchemy.engine.Engine:
+        """Return a new SQLAlchemy engine using the provided config.
+
+        Developers can generally override just one of the following:
+        `sqlalchemy_engine`, sqlalchemy_url`.
+
+        Returns:
+            A newly created SQLAlchemy engine object.
+        """
+        return sqlalchemy.create_engine(
+            self.sqlalchemy_url,
+            echo=False,
+        )
+
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
         """Return information about the primary key constraint on
         table_name`.
@@ -102,6 +116,44 @@ class Db2Connector(SQLConnector):
         Additional column attributes may be present.
         """
 
+        sql = """
+            SELECT
+                s."NAME" AS name,
+                s."COLTYPE" AS "type",
+                s."NULLS" AS nullable,
+                CAST(s."DEFAULT" AS VARCHAR) AS "default",
+                c."INCREMENT" = 1 AS autoincrement,
+                c."COLNAME" AS sequence_name,
+                c."START" AS sequence_start,
+                c."MINVALUE"  AS sequence_minvalue,
+                c."MAXVALUE" AS sequence_maxvalue,
+                c.COLNAME IS NOT NULL AND c."MINVALUE" IS NULL
+                    AS sequence_nominvalue,
+                c.COLNAME IS NOT NULL AND c."MAXVALUE" IS NULL
+                    AS sequence_nomaxvalue,
+                c.CYCLE = 'Y' AS sequence_cycle,
+                c.CACHE AS sequence_cache,
+                c.ORDER = 'Y' AS sequence_order
+            FROM SYSIBM.SYSCOLUMNS s
+            LEFT JOIN SYSCAT.TABLES t
+            ON s.TBNAME = t.TABNAME
+            LEFT JOIN SYSCAT.COLIDENTATTRIBUTES c
+            ON s.NAME = c.COLNAME
+            WHERE s.TBNAME = '{}'
+            AND t.TABSCHEMA = '{}'
+        """.format(
+            table_name, schema
+        )
+        result = connection.execute(sql).fetchall()
+
+        columns = {}
+        for column in result:
+            for k, v in column._mapping.items():
+                if "sequence_" not in k:
+                    columns[k] = str(v)
+
+        return columns
+
     def discover_catalog_entries(self) -> List[dict]:
         """Return a list of catalog entries from discovery.
 
@@ -124,8 +176,6 @@ class Db2Connector(SQLConnector):
                 (v, True) for v in view_names
             ]
 
-            self.logger.info(f"*** DEBUG *** object_names = {object_names}")
-
             # Iterate through each table and view
             for table_name, is_view in object_names:
                 # Initialize unique stream name
@@ -134,9 +184,6 @@ class Db2Connector(SQLConnector):
                     schema_name=schema_name,
                     table_name=table_name,
                     delimiter="-",
-                )
-                self.logger.info(
-                    f"*** DEBUG *** unique_stream_id = {unique_stream_id}"
                 )
 
                 connection = engine.connect()
@@ -160,10 +207,6 @@ class Db2Connector(SQLConnector):
                 #     if index_def.get("unique", False):
                 #         possible_primary_keys.append(index_def["column_names"])
                 key_properties = next(iter(possible_primary_keys), None)
-
-                self.logger.info(
-                    f"*** DEBUG *** key_properties = {key_properties}"
-                )
 
                 # Initialize columns list
                 table_schema = PropertiesList()
@@ -275,5 +318,5 @@ class Db2Stream(SQLStream):
         # If no overrides or optimizations are needed, you may delete this
         # method.
         # yield from super().get_records(partition)
-        # yield from super().get_records()
-        self.logger.info(self.connection)
+        yield from super().get_records()
+        # self.logger.info(self.connection)

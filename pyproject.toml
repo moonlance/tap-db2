@@ -39,4 +39,4 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 # CLI declaration
-tap-db2 = 'tap_db2.tap:TapDb2.cli'
+tap-db2 = 'tap_db2.tap:Db2Tap.cli'

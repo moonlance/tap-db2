@@ -2,7 +2,7 @@
 
 from typing import Dict, List
 
-from singer_sdk import SQLTap  # , SQLStream
+from singer_sdk import SQLTap
 from singer_sdk.typing import (
     DateTimeType,
     PropertiesList,
