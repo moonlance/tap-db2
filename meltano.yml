@@ -21,6 +21,13 @@ plugins:
           value: "2010-01-01T00:00:00Z"
       config:
         start_date: "2010-01-01T00:00:00Z"
+      metadata:
+        "*":
+          # replication-method: FULL_TABLE
+          replication-method: INCREMENTAL
+          replication-key: SEQID
+      select:
+        - "TOM     -volcano.*"
   loaders:
     - name: target-jsonl
       variant: andyh1203

@@ -9,12 +9,15 @@ import sqlalchemy
 from singer_sdk import SQLConnector, SQLStream
 from singer_sdk.helpers._singer import CatalogEntry, MetadataMapping
 from singer_sdk.typing import (
-    CustomType,
+    # CustomType,
+    IntegerType,
+    JSONTypeHelper,
     Property,
     PropertiesList,
+    StringType,
 )
 
-from typing import Any, Dict, Iterable, List, Optional, cast
+from typing import Any, Dict, Iterable, List, Optional  # , cast
 
 
 class Db2Connector(SQLConnector):
@@ -93,25 +96,25 @@ class Db2Connector(SQLConnector):
         information as a list of dictionaries with these keys:
 
         name
-          the column's name
+            the column's name
 
         type
-          [sqlalchemy.types#TypeEngine]
+            [sqlalchemy.types#TypeEngine]
 
         nullable
-          boolean
+            boolean
 
         default
-          the column's default value
+            the column's default value
 
         autoincrement
-          boolean
+            boolean
 
         sequence
-          a dictionary of the form
-              {'name' : str, 'start' :int, 'increment': int, 'minvalue': int,
-               'maxvalue': int, 'nominvalue': bool, 'nomaxvalue': bool,
-               'cycle': bool, 'cache': int, 'order': bool}
+            a dictionary of the form
+                {'name' : str, 'start' :int, 'increment': int, 'minvalue': int,
+                'maxvalue': int, 'nominvalue': bool, 'nomaxvalue': bool,
+                'cycle': bool, 'cache': int, 'order': bool}
 
         Additional column attributes may be present.
         """
@@ -142,17 +145,67 @@ class Db2Connector(SQLConnector):
             WHERE s.TBNAME = '{}'
             AND t.TABSCHEMA = '{}'
         """.format(
-            table_name, schema
+            table_name.upper(),
+            schema.upper(),
         )
         result = connection.execute(sql).fetchall()
-
-        columns = {}
-        for column in result:
-            for k, v in column._mapping.items():
+        columns = []
+        for row in result:
+            column = {"sequence": {}}
+            for k, v in row._mapping.items():
                 if "sequence_" not in k:
-                    columns[k] = str(v)
+                    column[k] = str(v)
+                else:
+                    k = k.split("_")[1]
+                    column["sequence"][k] = str(v)
+            columns.append(column)
 
         return columns
+
+    def get_table(self, full_table_name: str) -> sqlalchemy.Table:
+        """Return a table object.
+
+        Args:
+            full_table_name: Fully qualified table name.
+
+        Returns:
+            A table object with column list.
+        """
+        columns = self.get_table_columns(full_table_name).values()
+        _, schema_name, table_name = self.parse_full_table_name(
+            full_table_name
+        )
+        meta = sqlalchemy.MetaData()
+        return sqlalchemy.schema.Table(
+            table_name, meta, *list(columns), schema=schema_name
+        )
+
+    def get_table_columns(
+        self, full_table_name: str
+    ) -> Dict[str, sqlalchemy.Column]:
+        """Return a list of table columns.
+
+        Args:
+            full_table_name: Fully qualified table name.
+
+        Returns:
+            An ordered list of column objects.
+        """
+        _, schema_name, table_name = self.parse_full_table_name(
+            full_table_name
+        )
+
+        columns = self.get_columns(self.connection, table_name, schema_name)
+
+        result: Dict[str, sqlalchemy.Column] = {}
+        for col_meta in columns:
+            result[col_meta["name"]] = sqlalchemy.Column(
+                col_meta["name"],
+                self.to_sql_type(col_meta["type"]),
+                nullable=col_meta.get("nullable", False),
+            )
+
+        return result
 
     def discover_catalog_entries(self) -> List[dict]:
         """Return a list of catalog entries from discovery.
@@ -186,21 +239,16 @@ class Db2Connector(SQLConnector):
                     delimiter="-",
                 )
 
-                connection = engine.connect()
-
                 # Detect key properties
                 possible_primary_keys: List[List[str]] = []
-                # pk_def = inspected.get_pk_constraint(
-                #     table_name, schema=schema_name
-                # )
                 pk_def = self.get_pk_constraint(
-                    connection,
+                    self.connection,
                     table_name,
                     schema=schema_name,
                 )
                 if pk_def and "constrained_columns" in pk_def:
                     possible_primary_keys.append(pk_def["constrained_columns"])
-                # TO-DO: see if this is required
+                # TO-DO: to be implemented
                 # for index_def in inspected.get_indexes(
                 #     table_name, schema=schema_name
                 # ):
@@ -208,47 +256,27 @@ class Db2Connector(SQLConnector):
                 #         possible_primary_keys.append(index_def["column_names"])
                 key_properties = next(iter(possible_primary_keys), None)
 
-                # Initialize columns list
-                table_schema = PropertiesList()
-                for column_def in self.get_columns(
-                    connection,
-                    table_name,
-                    schema=schema_name,
-                ):
-                    column_name = column_def["name"]
-                    is_nullable = column_def.get("nullable", False)
-                    jsonschema_type: dict = self.to_jsonschema_type(
-                        cast(sqlalchemy.types.TypeEngine, column_def["type"])
-                    )
-                    table_schema.append(
-                        Property(
-                            name=column_name,
-                            wrapped=CustomType(jsonschema_type),
-                            required=not is_nullable,
-                        )
-                    )
-                schema = table_schema.to_dict()
-
                 # Initialize available replication methods
-                addl_replication_methods: List[str] = [
-                    ""
-                ]  # By default an empty list.
+                addl_replication_methods: List[str] = ["INCREMENTAL"]
+                # By default an empty list.
                 # Notes regarding replication methods:
                 # - 'INCREMENTAL' replication must be enabled by the user by
                 #   specifying a replication_key value.
                 # - 'LOG_BASED' replication must be enabled by the developer,
                 #   according to source-specific implementation capabilities.
+
                 replication_method = next(
                     reversed(["FULL_TABLE"] + addl_replication_methods)
                 )
 
                 # Create the catalog entry object
+                schema = self.schema(table_name, schema_name)
+
                 catalog_entry = CatalogEntry(
                     tap_stream_id=unique_stream_id,
                     stream=unique_stream_id,
                     table=table_name,
                     key_properties=key_properties,
-                    # key_properties=None,
                     schema=singer.Schema.from_dict(schema),
                     is_view=is_view,
                     replication_method=replication_method,
@@ -257,7 +285,6 @@ class Db2Connector(SQLConnector):
                         schema=schema,
                         replication_method=replication_method,
                         key_properties=key_properties,
-                        # key_properties=None,
                         valid_replication_keys=None,  # Must be defined by user
                     ),
                     database=None,  # Expects single-database context
@@ -269,27 +296,43 @@ class Db2Connector(SQLConnector):
 
         return result
 
+    def schema(self, table_name, schema_name) -> dict:
+        """Dynamically detect the json schema for the stream.
+        This is evaluated prior to any records being retrieved.
+        """
+        properties: List[Property] = []
+        for column_def in self.get_columns(
+            self.connection,
+            table_name,
+            schema=schema_name,
+        ):
+            column_name = column_def["name"]
+            column_type = self.get_jsonschema_type(str(column_def["type"]))
+            properties.append(Property(column_name, column_type))
+
+        return PropertiesList(*properties).to_dict()
+
     @staticmethod
-    def to_jsonschema_type(sql_type: sqlalchemy.types.TypeEngine) -> dict:
+    def get_jsonschema_type(column_type: str) -> JSONTypeHelper:
+        """Return a JSONTypeHelper object for the given type name."""
+        if column_type in ["INTEGER "]:
+            return IntegerType()
+        if column_type in ["VARCHAR "]:
+            return StringType()
+        raise ValueError(f"Unmappable data type '{column_type}'.")
+
+    @staticmethod
+    def to_sql_type(column_type: str) -> sqlalchemy.types.TypeEngine:
         """Returns a JSON Schema equivalent for the given SQL type.
 
         Developers may optionally add custom logic before calling the default
         implementation inherited from the base class.
         """
-        # Optionally, add custom logic before calling the super().
-        # You may delete this method if overrides are not needed.
-        return super().to_jsonschema_type(sql_type)
-
-    @staticmethod
-    def to_sql_type(jsonschema_type: dict) -> sqlalchemy.types.TypeEngine:
-        """Returns a JSON Schema equivalent for the given SQL type.
-
-        Developers may optionally add custom logic before calling the default
-        implementation inherited from the base class.
-        """
-        # Optionally, add custom logic before calling the super().
-        # You may delete this method if overrides are not needed.
-        return super().to_sql_type(jsonschema_type)
+        if column_type in ["INTEGER "]:
+            return sqlalchemy.types.Integer
+        if column_type in ["VARCHAR "]:
+            return sqlalchemy.types.String
+        raise ValueError(f"Unmappable data type '{column_type}'.")
 
 
 class Db2Stream(SQLStream):
@@ -297,26 +340,93 @@ class Db2Stream(SQLStream):
 
     connector_class = Db2Connector
 
-    def get_records(
-        self, partition: Optional[dict]
-    ) -> Iterable[Dict[str, Any]]:
-        """Return a generator of row-type dictionary objects.
+    def get_starting_replication_value(self, stream_or_partition_state: dict):
+        STARTING_MARKER = "starting_replication_value"
+        """Retrieve initial replication marker value from state."""
+        self.logger.info(f"*** DEBUG ***: sops = {stream_or_partition_state}")
+        if not stream_or_partition_state:
+            return None
+        return stream_or_partition_state.get(STARTING_MARKER)
 
-        Developers may optionally add custom logic before calling the default
-        implementation inherited from the base class.
+    def get_starting_replication_key_value(
+        self, context: Optional[dict]
+    ) -> Optional[Any]:
+        """Get starting replication key.
+
+        Will return the value of the stream's replication key when `--state`
+        is passed. If no prior state exists, will return `None`.
+
+        Developers should use this method to seed incremental processing for
+        non-datetime replication keys. For datetime and date replication keys,
+        use :meth:`~singer_sdk.Stream.get_starting_timestamp()`
 
         Args:
-            partition:
-                If provided, will read specifically from this data slice.
+            context: Stream partition or context dictionary.
+
+        Returns:
+            Starting replication value.
+        """
+        state = self.get_context_state(context)
+
+        self.logger.info(f"*** DEBUG ***: context = {context}")
+        self.logger.info(f"*** DEBUG ***: state = {state}")
+
+        return self.get_starting_replication_value(state)
+
+    def get_records(self, context: Optional[dict]) -> Iterable[Dict[str, Any]]:
+        """Return a generator of row-type dictionary objects.
+
+        If the stream has a replication_key value defined, records will be
+        sorted by the incremental key. If the stream also has an available
+        starting bookmark, the records will be filtered for values greater
+        than or equal to the bookmark value.
+
+        Args:
+            context: If partition context is provided, will read specifically
+                from this data slice.
 
         Yields:
             One dict per record.
+
+        Raises:
+            NotImplementedError: If partition is passed in context and the
+                stream does not support partitioning.
         """
-        # Optionally, add custom logic instead of calling the super().
-        # This is helpful if the source database provides batch-optimized
-        # record retrieval.
-        # If no overrides or optimizations are needed, you may delete this
-        # method.
-        # yield from super().get_records(partition)
-        yield from super().get_records()
-        # self.logger.info(self.connection)
+        if context:
+            raise NotImplementedError(
+                f"Stream '{self.name}' does not support partitioning."
+            )
+
+        table = self.connector.get_table(self.fully_qualified_name)
+        query = table.select()
+        if self.replication_key:
+            replication_key_col = table.columns[self.replication_key]
+            self.logger.info(
+                f"*** DEBUG ***: replication_key_col = {replication_key_col}"
+            )
+            query = query.order_by(replication_key_col)
+
+            start_val = self.get_starting_replication_key_value(context)
+            self.logger.info(f"*** DEBUG ***: start_val = {start_val}")
+            if start_val:
+                query = query.where(
+                    sqlalchemy.text(
+                        ":replication_key >= :start_val"
+                    ).bindparams(
+                        replication_key='"TOM     ".volcano."SEQID   "',
+                        # start_val=10,
+                        # replication_key=replication_key_col,
+                        start_val=start_val,
+                    )
+                    # sqlalchemy.text(
+                    #     "{} >= '{}'".format(replication_key_col, start_val)
+                    # )
+                )
+            self.logger.info(f"*** DEBUG ***: query = {query}")
+            self.logger.info(
+                f"*** DEBUG ***: replication_key_col = {replication_key_col}"
+            )
+            self.logger.info(f"*** DEBUG ***: start_val = {start_val}")
+
+        for row in self.connector.connection.execute(query):
+            yield dict(row)
