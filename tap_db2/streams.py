@@ -177,7 +177,10 @@ class Db2Connector(SQLConnector):
         )
         meta = sqlalchemy.MetaData()
         return sqlalchemy.schema.Table(
-            table_name, meta, *list(columns), schema=schema_name
+            table_name,
+            meta,
+            *list(columns),
+            schema=schema_name,
         )
 
     def get_table_columns(
@@ -399,13 +402,9 @@ class Db2Stream(SQLStream):
 
         table = self.connector.get_table(self.fully_qualified_name)
         query = table.select()
-        # self.logger.info(f"*** DEBUG ***: query = {query}")
         if self.replication_key:
-            replication_key_col = table.columns[self.replication_key]
-            self.logger.info(
-                f"*** DEBUG ***: replication_key_col = {replication_key_col}"
-            )
-            query = query.order_by(replication_key_col)
+            query = query.order_by(self.fully_qualified_name)
+            self.logger.info(f"*** DEBUG ***: query = {query}")
 
             start_val = self.get_starting_replication_key_value(context)
             self.logger.info(f"*** DEBUG ***: start_val = {start_val}")
@@ -414,20 +413,26 @@ class Db2Stream(SQLStream):
                     sqlalchemy.text(
                         ":replication_key >= :start_val"
                     ).bindparams(
-                        # replication_key='"TOM     ".volcano."SEQID   "',
-                        # start_val=10,
-                        replication_key=replication_key_col,
-                        start_val=start_val,
+                        replication_key=self.fully_qualified_name,
+                        start_val=10,
+                        # replication_key=replication_key_col,
+                        # start_val=start_val,
                     )
+                    # sqlalchemy.text(
+                    #     "{} >= '{}'".format(
+                    #         replication_key_col,
+                    #         start_val,
+                    #     )
+                    # )
                     # sqlalchemy.text(
                     #     "{} >= '{}'".format(replication_key_col, start_val)
                     # )
                 )
-            self.logger.info(f"*** DEBUG ***: query = {query}")
-            self.logger.info(
-                f"*** DEBUG ***: replication_key_col = {replication_key_col}"
-            )
-            self.logger.info(f"*** DEBUG ***: start_val = {start_val}")
+                self.logger.info(f"*** DEBUG ***: query = {query}")
+            # self.logger.info(
+            #     f"*** DEBUG ***: replication_key_col = {replication_key_col}"
+            # )
+            # self.logger.info(f"*** DEBUG ***: start_val = {start_val}")
 
         for row in self.connector.connection.execute(query):
             yield dict(row)
