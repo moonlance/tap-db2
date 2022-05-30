@@ -399,6 +399,7 @@ class Db2Stream(SQLStream):
 
         table = self.connector.get_table(self.fully_qualified_name)
         query = table.select()
+        # self.logger.info(f"*** DEBUG ***: query = {query}")
         if self.replication_key:
             replication_key_col = table.columns[self.replication_key]
             self.logger.info(
@@ -413,9 +414,9 @@ class Db2Stream(SQLStream):
                     sqlalchemy.text(
                         ":replication_key >= :start_val"
                     ).bindparams(
-                        replication_key='"TOM     ".volcano."SEQID   "',
+                        # replication_key='"TOM     ".volcano."SEQID   "',
                         # start_val=10,
-                        # replication_key=replication_key_col,
+                        replication_key=replication_key_col,
                         start_val=start_val,
                     )
                     # sqlalchemy.text(
