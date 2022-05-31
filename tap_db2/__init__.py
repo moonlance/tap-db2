@@ -63,12 +63,12 @@ STRING_TYPES = set(
         "enum",
         "longtext",
         "mediumtext",
-        "text",
-        "varchar",
-        "uniqueidentifier",
-        "nvarchar",
         "nchar",
+        "nvarchar",
+        "text",
+        "uniqueidentifier",
         "varbinary",
+        "varchar",
     ]
 )
 
@@ -82,10 +82,24 @@ BYTES_FOR_INTEGER_TYPE = {
     "bigint": 8,
 }
 
-FLOAT_TYPES = set(["float", "double", "money"])
+FLOAT_TYPES = set(
+    [
+        "decfloat",
+        "double",
+        "float",
+        "money",
+    ]
+)
 
 DATETIME_TYPES = set(
-    ["datetime", "datetime2", "timestamp", "date", "time", "smalldatetime"]
+    [
+        "date",
+        "datetime",
+        "datetime2",
+        "smalldatetime",
+        "time",
+        "timestamp",
+    ]
 )
 
 VARIANT_TYPES = set(["json"])
@@ -164,22 +178,6 @@ def create_column_metadata(cols):
 def discover_catalog(mssql_conn, config):
     """Returns a Catalog describing the structure of the database."""
     LOGGER.info("Preparing Catalog")
-    # filter_dbs_config = config.get("filter_dbs")
-    # if filter_dbs_config:
-    # filter_dbs_clause = ",".join(
-    #     ["'{}'".format(db) for db in filter_dbs_config.split(",")]
-    # )
-
-    # table_schema_clause = "WHERE c.table_schema IN ({})".format(
-    #     filter_dbs_clause
-    # )
-    # else:
-    #     table_schema_clause = """
-    #     WHERE q.table_schema NOT IN (
-    #     'information_schema',
-    #     'performance_schema',
-    #     'sys'
-    #     )"""
 
     with mssql_conn.connect() as open_conn:
         LOGGER.info("Fetching tables")
