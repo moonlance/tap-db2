@@ -23,7 +23,7 @@ setup(
         "pendulum==1.2.0",
         "pyodbc==4.0.26",
         "pytz>=2018.1",
-        "singer-python==5.9.0",
+        "singer-python>=5.12.0",
         "sqlalchemy<2.0.0",
     ],
     entry_points="""
