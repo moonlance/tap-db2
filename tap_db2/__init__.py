@@ -706,16 +706,30 @@ def do_sync(mssql_conn, config, catalog, state):
 
 def log_server_params(mssql_conn):
     with mssql_conn.connect() as open_conn:
+        #
+        # https://stackoverflow.com/questions/3821795/how-to-check-db2-version
+        # two approaches possible - TABLE(sysproc.env_get_inst_info())
+        #                      or - SYSIBMADM.ENV_INST_INFO
+        server_parameters=[
+                'INST_NAME',
+                'IS_INST_PARTITIONABLE',
+                'NUM_DBPARTITIONS',
+                'INST_PTR_SIZE',
+                'RELEASE_NUM',
+                'SERVICE_LEVEL',
+                'BLD_LEVEL',
+                'PTF',
+                'FIXPACK_NUM',
+                'NUM_MEMBERS'
+                ]
         try:
             row = open_conn.execute(
                 """
-                SELECT
-                    @@VERSION as version,
-                    @@lock_timeout as lock_wait_timeout
-                """
+                   SELECT {} FROM SYSIBMADM.ENV_INST_INFO
+                """.format(','.join(server_parameters))
             )
             LOGGER.info(
-                "Server Parameters: " + "version: %s, " + "lock_timeout: %s, ",
+                    "Server Parameters: " + ', '.join([p+': %s' for p in server_parameters]),
                 *row.fetchone(),
             )
         except Exception as e:
