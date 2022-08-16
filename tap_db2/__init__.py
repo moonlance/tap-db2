@@ -200,7 +200,7 @@ def discover_catalog(mssql_conn, config):
                 "is_view": table_type == "V",
             }
 
-            LOGGER.info(table_info)
+            LOGGER.debug(table_info)
         LOGGER.info("Tables fetched, fetching columns")
         column_results = open_conn.execute(
             """
