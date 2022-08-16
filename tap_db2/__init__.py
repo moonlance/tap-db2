@@ -91,7 +91,7 @@ STRING_TYPES = set(
 BYTES_FOR_INTEGER_TYPE = {
     "SMALLINT": 2,
     "INTEGER": 4,
-    "REAL": 4
+    "REAL": 4,
     "BIGINT": 8,
 }
 
