@@ -38,7 +38,6 @@ Column = collections.namedtuple(
         "column_name",
         "data_type",
         "character_maximum_length",
-        "numeric_precision",
         "numeric_scale",
         "is_primary_key",
     ],
@@ -57,32 +56,24 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Define data types
-# Desired types
-#CHAR
-#INTEGER
-#TIMESTMP
-#VARCHAR
-#XML
 
 # Full list
-#BIGINT - int
-#BLOB - xx
-#CHAR - string
-#CLOB - xx
-#DATE - date
-#DECIMAL - float
-#DISTINCT - xx
-#DOUBLE - float
-#INTEGER - int
-#REAL - int
-#SMALLINT - int
-#TIMESTMP - date
-#VARCHAR - string
-#XML - string
+#BIGINT - i
+#BLOB - ignore for now
+#CHARACTER - s
+#CLOB - ignore for now
+#DATE - d
+#DECIMAL - f
+#DOUBLE - f
+#INTEGER - i
+#SMALLINT - i
+#TIMESTAMP - d
+#VARCHAR - s
+#XML - s
 
 STRING_TYPES = set(
     [
-        "char",
+        "character",
         "varchar",
         "xml",
     ]
@@ -91,7 +82,6 @@ STRING_TYPES = set(
 BYTES_FOR_INTEGER_TYPE = {
     "smallint": 2,
     "integer": 4,
-    "real": 4,
     "bigint": 8,
 }
 
@@ -105,7 +95,7 @@ FLOAT_TYPES = set(
 DATETIME_TYPES = set(
     [
         "date",
-        "timestmp",
+        "timestamp",
     ]
 )
 
@@ -217,19 +207,21 @@ def discover_catalog(mssql_conn, config):
             SELECT
                 RTRIM(t.TABSCHEMA) AS TABLE_SCHEMA,
                 t.TABNAME AS TABLE_NAME,
-                s.NAME AS COLUMN_NAME,
-                s.COLTYPE AS DATA_TYPE,
-                s.LENGTH AS CHARACTER_MAXIMUM_LENGTH,
-                s.LONGLENGTH AS NUMERIC_PRECISION,
-                s.SCALE AS NUMERIC_SCALE,
+                c.COLNAME AS COLUMN_NAME,
+                c.TYPENAME AS DATA_TYPE,
+                c.LENGTH AS CHARACTER_MAXIMUM_LENGTH,
+                c."SCALE" AS NUMERIC_SCALE,
                 CASE
-                    WHEN s.KEYSEQ IS NOT NULL THEN 1
+                    WHEN c.KEYSEQ IS NOT NULL THEN 1
                     ELSE 0
                 END AS IS_PRIMARY_KEY
-            FROM SYSIBM.SYSCOLUMNS s
-            LEFT JOIN SYSCAT.TABLES t
-            ON s.TBNAME = t.TABNAME
-            WHERE t.TABSCHEMA NOT LIKE 'SYS%'
+            FROM 
+            SYSCAT.TABLES t
+            LEFT JOIN 
+            SYSCAT.COLUMNS c
+            ON c.TABNAME = t.TABNAME 
+            AND c.TABSCHEMA = t.TABSCHEMA 
+            WHERE t.TABSCHEMA NOT LIKE 'SYS%';
             """
         )
         columns = []
