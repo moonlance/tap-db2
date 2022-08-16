@@ -82,30 +82,30 @@ logger.setLevel(logging.INFO)
 
 STRING_TYPES = set(
     [
-        "CHAR",
-        "VARCHAR",
-        "XML",
+        "char",
+        "varchar",
+        "xml",
     ]
 )
 
 BYTES_FOR_INTEGER_TYPE = {
-    "SMALLINT": 2,
-    "INTEGER": 4,
-    "REAL": 4,
-    "BIGINT": 8,
+    "smallint": 2,
+    "integer": 4,
+    "real": 4,
+    "bigint": 8,
 }
 
 FLOAT_TYPES = set(
     [
-        "DECIMAL",
-        "DOUBLE",
+        "decimal",
+        "double",
     ]
 )
 
 DATETIME_TYPES = set(
     [
-        "DATE",
-        "TIMESTMP",
+        "date",
+        "timestmp",
     ]
 )
 
