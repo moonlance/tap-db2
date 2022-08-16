@@ -209,7 +209,10 @@ def discover_catalog(mssql_conn, config):
                 "is_view": table_type == "V",
             }
 
-            LOGGER.debug(table_info)
+            LOGGER.debug(f"Schema: {db}, Table: {table}")
+            # Previously this would dump the entire catalog each loop
+            # this will only dump the current table info
+            LOGGER.debug(table_info[db][table])
         LOGGER.info("Tables fetched, fetching columns")
         column_results = open_conn.execute(
             """
@@ -230,7 +233,8 @@ def discover_catalog(mssql_conn, config):
             SYSCAT.COLUMNS c
             ON c.TABNAME = t.TABNAME 
             AND c.TABSCHEMA = t.TABSCHEMA 
-            WHERE t.TABSCHEMA NOT LIKE 'SYS%';
+            WHERE t.TABSCHEMA NOT LIKE 'SYS%'
+            ORDER BY t.TABSCHEMA,t.TABNAME,c.COLNO;
             """
         )
         columns = []
