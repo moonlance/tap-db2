@@ -56,54 +56,58 @@ LOGGER = singer.get_logger()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# Define data types
+# Desired types
+#CHAR
+#INTEGER
+#TIMESTMP
+#VARCHAR
+#XML
+
+# Full list
+#BIGINT - int
+#BLOB - xx
+#CHAR - string
+#CLOB - xx
+#DATE - date
+#DECIMAL - float
+#DISTINCT - xx
+#DOUBLE - float
+#INTEGER - int
+#REAL - int
+#SMALLINT - int
+#TIMESTMP - date
+#VARCHAR - string
+#XML - string
+
 STRING_TYPES = set(
     [
-        "binary",
-        "char",
-        "enum",
-        "longtext",
-        "mediumtext",
-        "nchar",
-        "nvarchar",
-        "text",
-        "uniqueidentifier",
-        "varbinary",
-        "varchar",
+        "CHAR",
+        "VARCHAR",
+        "XML",
     ]
 )
 
 BYTES_FOR_INTEGER_TYPE = {
-    "tinyint": 1,
-    "smallint": 2,
-    "mediumint": 3,
-    "int": 4,
-    "integer": 4,
-    "real": 4,
-    "bigint": 8,
+    "SMALLINT": 2,
+    "INTEGER": 4,
+    "REAL": 4
+    "BIGINT": 8,
 }
 
 FLOAT_TYPES = set(
     [
-        "decfloat",
-        "double",
-        "float",
-        "money",
+        "DECIMAL",
+        "DOUBLE",
     ]
 )
 
 DATETIME_TYPES = set(
     [
-        "date",
-        "datetime",
-        "datetime2",
-        "smalldatetime",
-        "time",
-        "timestamp",
+        "DATE",
+        "TIMESTMP",
     ]
 )
-
-VARIANT_TYPES = set(["json"])
-
 
 def schema_for_column(c):
     """Returns the Schema object for the given Column."""
@@ -184,7 +188,7 @@ def discover_catalog(mssql_conn, config):
         tables_results = open_conn.execute(
             """
             SELECT
-                TABSCHEMA AS TABLE_SCHEMA,
+                RTRIM(TABSCHEMA) AS TABLE_SCHEMA,
                 TABNAME AS TABLE_NAME,
                 TYPE AS TABLE_TYPE
             FROM SYSCAT.TABLES t
@@ -214,7 +218,7 @@ def discover_catalog(mssql_conn, config):
         column_results = open_conn.execute(
             """
             SELECT
-                t.TABSCHEMA AS TABLE_SCHEMA,
+                RTRIM(t.TABSCHEMA) AS TABLE_SCHEMA,
                 t.TABNAME AS TABLE_NAME,
                 s.NAME AS COLUMN_NAME,
                 s.COLTYPE AS DATA_TYPE,
