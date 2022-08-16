@@ -94,26 +94,33 @@ FLOAT_TYPES = set(
 
 DATETIME_TYPES = set(
     [
-        "date",
         "timestamp",
     ]
 )
 
-def schema_for_column(c):
+DATE_TYPES = set(
+        [
+            "date",
+        ]
+)
+
+def default_date_format():
+    return False
+
+def schema_for_column(c,config):
     """Returns the Schema object for the given Column."""
     data_type = c.data_type.strip().lower()
 
     inclusion = "available"
+
+    use_date_data_type_format = config.get('use_date_datatype') or default_date_format()
 
     if c.is_primary_key == 1:
         inclusion = "automatic"
 
     result = Schema(inclusion=inclusion)
 
-    if data_type == "bit":
-        result.type = ["null", "boolean"]
-
-    elif data_type in BYTES_FOR_INTEGER_TYPE:
+    if data_type in BYTES_FOR_INTEGER_TYPE:
         result.type = ["null", "integer"]
         bits = BYTES_FOR_INTEGER_TYPE[data_type] * 8
         result.minimum = 0 - 2 ** (bits - 1)
@@ -123,11 +130,6 @@ def schema_for_column(c):
         result.type = ["null", "number"]
         result.multipleOf = 10 ** (0 - (c.numeric_scale or 6))
 
-    elif data_type in ["decimal", "numeric"]:
-        result.type = ["null", "number"]
-        result.multipleOf = 10 ** (0 - c.numeric_scale)
-        return result
-
     elif data_type in STRING_TYPES:
         result.type = ["null", "string"]
         result.maxLength = c.character_maximum_length
@@ -135,6 +137,13 @@ def schema_for_column(c):
     elif data_type in DATETIME_TYPES:
         result.type = ["null", "string"]
         result.format = "date-time"
+
+    elif data_type in DATE_TYPES:
+        result.type = ["null","string"]
+        if use_date_data_type_format:
+            result.format = "date"
+        else:
+            result.format = "date-time"
 
     else:
         result = Schema(
@@ -145,11 +154,11 @@ def schema_for_column(c):
     return result
 
 
-def create_column_metadata(cols):
+def create_column_metadata(cols, config):
     mdata = {}
     mdata = metadata.write(mdata, (), "selected-by-default", False)
     for c in cols:
-        schema = schema_for_column(c)
+        schema = schema_for_column(c, config)
         mdata = metadata.write(
             mdata,
             ("properties", c.column_name),
@@ -239,9 +248,9 @@ def discover_catalog(mssql_conn, config):
             (table_schema, table_name) = k
             schema = Schema(
                 type="object",
-                properties={c.column_name: schema_for_column(c) for c in cols},
+                properties={c.column_name: schema_for_column(c, config) for c in cols},
             )
-            md = create_column_metadata(cols)
+            md = create_column_metadata(cols, config)
             md_map = metadata.to_map(md)
 
             md_map = metadata.write(md_map, (), "database-name", table_schema)

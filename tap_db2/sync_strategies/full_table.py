@@ -80,6 +80,7 @@ def sync_table(mssql_conn, config, catalog_entry, state, columns, stream_version
             stream_version,
             table_stream,
             params,
+            config,
         )
 
         if catalog_entry.tap_stream_id == "dbo-InputMetadata":

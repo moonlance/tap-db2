@@ -23,7 +23,6 @@ def escape(string):
         )
     return '"' + string + '"'
 
-
 def set_schema_mapping(config, stream):
     schema_mapping = config.get("include_schemas_in_destination_stream_name")
 
@@ -101,11 +100,14 @@ def generate_select_sql(catalog_entry, columns):
     select_sql = select_sql.replace("%", "%%")
     return select_sql
 
+def default_date_format():
+    return False
 
 def row_to_singer_record(
-    catalog_entry, version, table_stream, row, columns, time_extracted
+    catalog_entry, version, table_stream, row, columns, time_extracted, config
 ):
     row_to_persist = ()
+    use_date_data_type_format = config.get("use_date_datatype") or default_date_format()
     md_map = metadata.to_map(catalog_entry.metadata)
     md_map[("properties", "_sdc_deleted_at")] = {
         "sql-datatype": "datetime"  # maybe datetimeoffset??
@@ -117,7 +119,10 @@ def row_to_singer_record(
             row_to_persist += (elem.isoformat() + "+00:00",)
 
         elif isinstance(elem, datetime.date):
-            row_to_persist += (elem.isoformat() + "T00:00:00+00:00",)
+            if use_date_data_type_format:
+                row_to_persist += (elem.isoformat(),)
+            else:
+                row_to_persist += (elem.isoformat() + "T00:00:00+00:00",)
 
         elif isinstance(elem, datetime.timedelta):
             epoch = datetime.datetime.utcfromtimestamp(0)
@@ -176,6 +181,7 @@ def sync_query(
     stream_version,
     table_stream,
     params,
+    config,
 ):
     replication_key = singer.get_bookmark(
         state, catalog_entry.tap_stream_id, "replication_key"
@@ -207,6 +213,7 @@ def sync_query(
                 row,
                 columns,
                 time_extracted,
+                config,
             )
             singer.write_message(record_message)
             md_map = metadata.to_map(catalog_entry.metadata)
