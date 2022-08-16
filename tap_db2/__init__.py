@@ -146,9 +146,6 @@ def schema_for_column(c):
         result.type = ["null", "string"]
         result.format = "date-time"
 
-    elif data_type in VARIANT_TYPES:
-        result.type = ["null", "object"]
-
     else:
         result = Schema(
             None,
