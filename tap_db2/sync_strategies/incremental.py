@@ -5,10 +5,6 @@ import pendulum
 import singer
 from singer import metadata
 
-# from tap_db2.connection import (
-#     # connect_with_backoff,
-#     get_azure_sql_engine,
-# )
 import tap_db2.sync_strategies.common as common
 
 LOGGER = singer.get_logger()

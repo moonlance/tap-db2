@@ -57,8 +57,8 @@ def revert_ouput_converter(conn, prev_converter):
     conn.connection.add_output_converter(pyodbc.SQL_WVARCHAR, prev_converter)
 
 
-def get_azure_sql_engine(config) -> Engine:
-    """The All-Purpose SQL connection object for the Azure Data Warehouse."""
+def get_db2_sql_engine(config) -> Engine:
+    """Using parameters from the config to connect to DB2 using ibm_db_sa+pyodbc"""
 
     # connection_string = "ibm_db_sa+pyodbc://db2inst1:*
     # @localhost:50000/TESTDB"
