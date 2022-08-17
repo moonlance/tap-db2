@@ -107,6 +107,13 @@ DATE_TYPES = set(
 def default_date_format():
     return False
 
+def default_offset_value():
+    """
+    Function included to remain consistent with MSSQL tap using a False-returning function
+    for default_date_format
+    """
+    return False
+
 def schema_for_column(c,config):
     """Returns the Schema object for the given Column."""
     data_type = c.data_type.strip().lower()

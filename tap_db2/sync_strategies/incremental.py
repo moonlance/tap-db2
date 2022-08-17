@@ -11,7 +11,6 @@ LOGGER = singer.get_logger()
 
 BOOKMARK_KEYS = {"replication_key", "replication_key_value", "version"}
 
-
 def sync_table(mssql_conn, config, catalog_entry, state, columns):
     common.whitelist_bookmark_keys(
         BOOKMARK_KEYS, catalog_entry.tap_stream_id, state
@@ -56,25 +55,31 @@ def sync_table(mssql_conn, config, catalog_entry, state, columns):
     )
 
     singer.write_message(activate_version_message)
+    
+    # Get the offset value from config
+    offset_value = config.get('offset_value') or 0
+    LOGGER.info(f"Incremental Load will be offset by {offset_value}")
+    
     LOGGER.info("Beginning SQL")
     with mssql_conn.connect() as open_conn:
         select_sql = common.generate_select_sql(catalog_entry, columns)
         params = {}
 
         if replication_key_value is not None:
-            if (
-                catalog_entry.schema.properties[
-                    replication_key_metadata
-                ].format
-                == "date-time"
-            ):
-                replication_key_value = pendulum.parse(replication_key_value)
+            replication_key_format = catalog_entry.schema.properties[
+              replication_key_metadata
+              ].format
+            
+            select_sql += f' WHERE "{replication_key_metadata}" >= ? '
 
-            select_sql += ' WHERE "{}" >= ? ORDER BY "{}" ASC'.format(
-                replication_key_metadata, replication_key_metadata
-            )
+            if replication_key_format == "date-time":
+                replication_key_value = pendulum.parse(replication_key_value).add(seconds=offset_value)
+                select_sql += f' ORDER BY "{replication_key_metadata}" ASC'
+            else:
+                select_sql += f' + ({offset_value}) ORDER BY "{replication_key_metadata}" ASC' 
 
             params["replication_key_value"] = replication_key_value
+            
         elif replication_key_metadata is not None:
             select_sql += ' ORDER BY "{}" ASC'.format(replication_key_metadata)
 
@@ -89,3 +94,4 @@ def sync_table(mssql_conn, config, catalog_entry, state, columns):
             params,
             config,
         )
+

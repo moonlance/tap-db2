@@ -103,6 +103,13 @@ def generate_select_sql(catalog_entry, columns):
 def default_date_format():
     return False
 
+def default_offset_value():
+    """
+    Function included to remain consistent with MSSQL tap using a False-returning function
+    for default_date_format
+    """
+    return False
+
 def row_to_singer_record(
     catalog_entry, version, table_stream, row, columns, time_extracted, config
 ):
@@ -193,6 +200,7 @@ def sync_query(
     if len(params) == 0:
         results = cursor.execute(select_sql)
     else:
+        LOGGER.info(params["replication_key_value"])
         results = cursor.execute(select_sql, params["replication_key_value"])
     row = results.fetchone()
     rows_saved = 0
