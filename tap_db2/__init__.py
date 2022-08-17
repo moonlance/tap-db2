@@ -91,13 +91,16 @@ BYTES_FOR_INTEGER_TYPE = {
 # DOUBLE -307
 # DECFLOAT(16/8) -383
 # DECFLOAT(34/16) -6143
+# For practicality this will be limited to -50
+MAX_EXPONENT=-50
+
 FLOAT_TYPE_EXPONENT = {
   "real":-37,
-  "double":-307,
-  "decfloat":{16:-6143,8:-383},
-)
+  "double":MAX_EXPONENT,
+  "decfloat":MAX_EXPONENT,
+}
 
-DECIMAL_TYPE_PRECISION = set(
+DECIMAL_TYPES = set(
     [
         "decimal",
         "numeric"
@@ -147,10 +150,10 @@ def schema_for_column(c,config):
 
     elif data_type in FLOAT_TYPE_EXPONENT:
         result.type = ["null", "number"]
-        if data_type == 'decfloat':
-            result.multipleOf = 10 ** (0 - c.numeric_scale or FLOAT_TYPE_EXPONENT[data_type][c.character_maximum_length])
-        else:
-            result.multipleOf = 10 ** (0 - (c.numeric_scale or FLOAT_TYPE_EXPONENT[data_type]))
+        # Testing on DB2 LUW v10.5 showed that large DECFLOAT(16) values were not handled correctly
+        if c.character_maximum_length == 8 and data_type == 'decfloat':
+            LOGGER.warning(f"DECFLOAT(16) - (length=8) - values > 10^16 are not handled correctly (table={c.table_name} column={c.column_name})")
+        result.multipleOf = 10 ** (0 - (c.numeric_scale or FLOAT_TYPE_EXPONENT[data_type]*-1))
 
     elif data_type in DECIMAL_TYPES:
         result.type = ["null", "number"]
