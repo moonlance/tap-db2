@@ -72,11 +72,15 @@ def sync_table(mssql_conn, config, catalog_entry, state, columns):
             
             select_sql += f' WHERE "{replication_key_metadata}" >= ? '
 
+            # Handle the offset value
+            # datetime - use pendulum to alter the value to be passed as a bind parameter
+            # other (numeric) - add the offset value in the SQL
             if replication_key_format == "date-time":
                 replication_key_value = pendulum.parse(replication_key_value).add(seconds=offset_value)
-                select_sql += f' ORDER BY "{replication_key_metadata}" ASC'
             else:
-                select_sql += f' + ({offset_value}) ORDER BY "{replication_key_metadata}" ASC' 
+                select_sql += f' + ({offset_value})' 
+
+            select_sql += f' ORDER BY "{replication_key_metadata}" ASC'
 
             params["replication_key_value"] = replication_key_value
             
