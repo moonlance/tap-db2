@@ -73,6 +73,7 @@ logger.setLevel(logging.INFO)
 
 STRING_TYPES = set(
     [
+        "char",
         "character",
         "varchar",
         "xml",
@@ -82,13 +83,24 @@ STRING_TYPES = set(
 BYTES_FOR_INTEGER_TYPE = {
     "smallint": 2,
     "integer": 4,
+    "int": 4,
     "bigint": 8,
 }
 
-FLOAT_TYPES = set(
+# REAL -37
+# DOUBLE -307
+# DECFLOAT(16/8) -383
+# DECFLOAT(34/16) -6143
+FLOAT_TYPE_EXPONENT = {
+  "real":-37,
+  "double":-307,
+  "decfloat":{16:-6143,8:-383},
+)
+
+DECIMAL_TYPE_PRECISION = set(
     [
         "decimal",
-        "double",
+        "numeric"
     ]
 )
 
@@ -133,9 +145,19 @@ def schema_for_column(c,config):
         result.minimum = 0 - 2 ** (bits - 1)
         result.maximum = 2 ** (bits - 1) - 1
 
-    elif data_type in FLOAT_TYPES:
+    elif data_type in FLOAT_TYPE_EXPONENT:
         result.type = ["null", "number"]
-        result.multipleOf = 10 ** (0 - (c.numeric_scale or 6))
+        if data_type == 'decfloat':
+            result.multipleOf = 10 ** (0 - c.numeric_scale or FLOAT_TYPE_EXPONENT[data_type][c.character_maximum_length])
+        else:
+            result.multipleOf = 10 ** (0 - (c.numeric_scale or FLOAT_TYPE_EXPONENT[data_type]))
+
+    elif data_type in DECIMAL_TYPES:
+        result.type = ["null", "number"]
+        # Numeric scale is directly determined by the numeric_scale value
+        # zero is a valid value - if scale = 0 then the column does not accept decimals
+        # so 10^0 = 1 is the multipleOf
+        result.multipleOf = 10 ** (0 - (c.numeric_scale))
 
     elif data_type in STRING_TYPES:
         result.type = ["null", "string"]
