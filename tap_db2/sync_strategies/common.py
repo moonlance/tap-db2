@@ -158,7 +158,7 @@ def row_to_singer_record(
         elif isinstance(elem, uuid.UUID):
             row_to_persist += (str(elem),)
         
-        elif ('string' in property_type or property_type == 'string') and property_format == 'singer.decimal':
+        elif property_format == 'singer.decimal':
             row_to_persist += (str(elem),)
             
         else:
