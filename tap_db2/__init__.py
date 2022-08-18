@@ -128,6 +128,13 @@ def default_offset_value():
     for default_date_format
     """
     return False
+  
+def default_singer_decimal():
+    """
+    singer_decimal can be enabled in the the config, which will use singer.decimal as a format and string as the type
+    use this for large/precise numbers
+    """
+    return False
 
 def schema_for_column(c,config):
     """Returns the Schema object for the given Column."""
@@ -136,11 +143,17 @@ def schema_for_column(c,config):
     inclusion = "available"
 
     use_date_data_type_format = config.get('use_date_datatype') or default_date_format()
+    use_singer_decimal = config.get('use_singer_decimal') or default_singer_decimal()
 
     if c.is_primary_key == 1:
         inclusion = "automatic"
 
     result = Schema(inclusion=inclusion)
+    
+    # the tap-oracle behaviour:
+    # integer (small/big/normal) to integer - sysmaxsize can hold all these
+    # all decimals, floats and numerics to string/singer.decimal
+    # number with no c.numeric_scale to integer
 
     if data_type in BYTES_FOR_INTEGER_TYPE:
         result.type = ["null", "integer"]
@@ -149,18 +162,26 @@ def schema_for_column(c,config):
         result.maximum = 2 ** (bits - 1) - 1
 
     elif data_type in FLOAT_TYPE_EXPONENT:
-        result.type = ["null", "number"]
-        # Testing on DB2 LUW v10.5 showed that large DECFLOAT(16) values were not handled correctly
-        if c.character_maximum_length == 8 and data_type == 'decfloat':
-            LOGGER.warning(f"DECFLOAT(16) - (length=8) - values > 10^16 are not handled correctly (table={c.table_name} column={c.column_name})")
-        result.multipleOf = 10 ** (0 - (c.numeric_scale or FLOAT_TYPE_EXPONENT[data_type]*-1))
+        if use_singer_decimal:
+            result.type = ["null","string"]
+            result.format = "singer.decimal"
+        else:
+            result.type = ["null", "number"]
+            # Testing on DB2 LUW v10.5 showed that large DECFLOAT(16) values were not handled correctly
+            if c.character_maximum_length == 8 and data_type == 'decfloat':
+                LOGGER.warning(f"DECFLOAT(16) - (length=8) - values > 10^16 are not handled correctly (table={c.table_name} column={c.column_name})")
+            result.multipleOf = 10 ** (0 - (c.numeric_scale or FLOAT_TYPE_EXPONENT[data_type]*-1))
 
     elif data_type in DECIMAL_TYPES:
-        result.type = ["null", "number"]
-        # Numeric scale is directly determined by the numeric_scale value
-        # zero is a valid value - if scale = 0 then the column does not accept decimals
-        # so 10^0 = 1 is the multipleOf
-        result.multipleOf = 10 ** (0 - (c.numeric_scale))
+        if use_singer_decimal:
+            result.type = ["null","string"]
+            result.format = "singer.decimal"
+        else:
+            result.type = ["null", "number"]
+            # Numeric scale is directly determined by the numeric_scale value
+            # zero is a valid value - if scale = 0 then the column does not accept decimals
+            # so 10^0 = 1 is the multipleOf
+            result.multipleOf = 10 ** (0 - (c.numeric_scale))
 
     elif data_type in STRING_TYPES:
         result.type = ["null", "string"]

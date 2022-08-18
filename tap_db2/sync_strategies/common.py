@@ -120,8 +120,9 @@ def row_to_singer_record(
         "sql-datatype": "datetime"  # maybe datetimeoffset??
     }
     for idx, elem in enumerate(row):
-        # property_type = catalog_entry.schema.properties[columns[idx]].type
-        property_type = md_map.get(("properties", columns[idx])).get("sql-datatype")
+        property_type = catalog_entry.schema.properties[columns[idx]].type
+        sql_data_type = md_map.get(("properties", columns[idx])).get("sql-datatype")
+        property_format = catalog_entry.schema.properties[columns[idx]].format
         if isinstance(elem, datetime.datetime):
             row_to_persist += (elem.isoformat() + "+00:00",)
 
@@ -137,7 +138,7 @@ def row_to_singer_record(
             row_to_persist += (timedelta_from_epoch.isoformat() + "+00:00",)
 
         elif isinstance(elem, bytes):
-            if property_type in ["binary", "varbinary"]:
+            if sql_data_type in ["binary", "varbinary"]:
                 # Convert binary byte array to hex string‘
                 hex_representation = f"0x{elem.hex().upper()}"
                 row_to_persist += (hex_representation,)
@@ -146,7 +147,7 @@ def row_to_singer_record(
                 boolean_representation = elem != b"\x00"
                 row_to_persist += (boolean_representation,)
 
-        elif "boolean" in property_type or property_type == "boolean":
+        elif "boolean" in sql_data_type or sql_data_type == "boolean":
             if elem is None:
                 boolean_representation = None
             elif elem == 0:
@@ -156,6 +157,10 @@ def row_to_singer_record(
             row_to_persist += (boolean_representation,)
         elif isinstance(elem, uuid.UUID):
             row_to_persist += (str(elem),)
+        
+        elif ('string' in property_type or property_type == 'string') and property_format == 'singer.decimal':
+            row_to_persist += (str(elem),)
+            
         else:
             row_to_persist += (elem,)
     rec = dict(zip(columns, row_to_persist))
