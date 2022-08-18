@@ -152,7 +152,7 @@ def schema_for_column(c,config):
     
     # the tap-oracle behaviour:
     # integer (small/big/normal) to integer - sysmaxsize can hold all these
-    # all decimals, floats and numerics to string/singer.decimal
+    # all decimals, floats and numerics to number/singer.decimal
     # number with no c.numeric_scale to integer
 
     if data_type in BYTES_FOR_INTEGER_TYPE:
@@ -176,6 +176,7 @@ def schema_for_column(c,config):
         if use_singer_decimal:
             result.type = ["null","number"]
             result.format = "singer.decimal"
+            result.additionalProperties = {"scale_precision": f"({c.character_maximum_length},{c.numeric_scale})"}
         else:
             result.type = ["null", "number"]
             # Numeric scale is directly determined by the numeric_scale value
