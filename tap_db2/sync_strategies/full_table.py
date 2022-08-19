@@ -9,7 +9,7 @@ import tap_db2.sync_strategies.common as common
 
 from tap_db2.connection import (
     connect_with_backoff,
-    get_azure_sql_engine,
+    get_db2_sql_engine,
     modify_ouput_converter,
     revert_ouput_converter,
 )
@@ -35,7 +35,7 @@ def generate_bookmark_keys(catalog_entry):
 
 
 def sync_table(mssql_conn, config, catalog_entry, state, columns, stream_version):
-    mssql_conn = get_azure_sql_engine(config)
+    mssql_conn = get_db2_sql_engine(config)
     common.whitelist_bookmark_keys(
         generate_bookmark_keys(catalog_entry), catalog_entry.tap_stream_id, state
     )

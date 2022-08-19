@@ -1,12 +1,12 @@
 import os
 import pymysql
 import singer
-import tap_mysql
-import tap_mysql.sync_strategies.common as common
-from tap_mysql.connection import MySQLConnection
+import tap_db2
+import tap_db2.sync_strategies.common as common
+from tap_db2.connection import get_db2_sql_engine
 
-DB_NAME = "tap_mysql_test"
-
+args = singer.utils.parse_args(tap_db2.REQUIRED_CONFIG_KEYS)
+mssql_conn = get_db2_sql_engine(args.config)
 
 def get_db_config():
     config = {}

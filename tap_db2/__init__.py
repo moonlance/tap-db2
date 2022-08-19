@@ -26,7 +26,7 @@ import tap_db2.sync_strategies.logical as logical
 
 from tap_db2.connection import (
     # connect_with_backoff,
-    get_azure_sql_engine,
+    get_db2_sql_engine,
 )
 
 
@@ -727,7 +727,7 @@ def log_server_params(mssql_conn):
 
 def main_impl():
     args = utils.parse_args(REQUIRED_CONFIG_KEYS)
-    mssql_conn = get_azure_sql_engine(args.config)
+    mssql_conn = get_db2_sql_engine(args.config)
     log_server_params(mssql_conn)
 
     if args.discover:
