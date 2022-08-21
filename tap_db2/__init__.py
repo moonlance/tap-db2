@@ -163,7 +163,7 @@ def schema_for_column(c,config):
 
     elif data_type in FLOAT_TYPE_EXPONENT:
         if use_singer_decimal:
-            result.type = ["null","number"]
+            result.type = ["null","string"]
             result.format = "singer.decimal"
         else:
             result.type = ["null", "number"]
