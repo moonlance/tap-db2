@@ -58,7 +58,7 @@ def revert_ouput_converter(conn, prev_converter):
 
 
 def get_db2_sql_engine(config) -> Engine:
-    """The All-Purpose SQL connection object for DB2."""
+    """Using parameters from the config to connect to DB2 using ibm_db_sa+pyodbc"""
 
     # connection_string = "ibm_db_sa+pyodbc://db2inst1:*
     # @localhost:50000/TESTDB"

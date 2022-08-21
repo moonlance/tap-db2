@@ -38,7 +38,6 @@ Column = collections.namedtuple(
         "column_name",
         "data_type",
         "character_maximum_length",
-        "numeric_precision",
         "numeric_scale",
         "is_primary_key",
     ],
@@ -56,83 +55,134 @@ LOGGER = singer.get_logger()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# Define data types
+
+# Full list
+#BIGINT - i
+#BLOB - ignore for now
+#CHARACTER - s
+#CLOB - ignore for now
+#DATE - d
+#DECIMAL - f
+#DOUBLE - f
+#INTEGER - i
+#SMALLINT - i
+#TIMESTAMP - d
+#VARCHAR - s
+#XML - s
+
 STRING_TYPES = set(
     [
-        "binary",
         "char",
-        "enum",
-        "longtext",
-        "mediumtext",
-        "nchar",
-        "nvarchar",
-        "text",
-        "uniqueidentifier",
-        "varbinary",
+        "character",
         "varchar",
+        "xml",
     ]
 )
 
 BYTES_FOR_INTEGER_TYPE = {
-    "tinyint": 1,
     "smallint": 2,
-    "mediumint": 3,
-    "int": 4,
     "integer": 4,
-    "real": 4,
+    "int": 4,
     "bigint": 8,
 }
 
-FLOAT_TYPES = set(
+# REAL -37
+# DOUBLE -307
+# DECFLOAT(16/8) -383
+# DECFLOAT(34/16) -6143
+# For practicality this will be limited to -50
+MAX_EXPONENT=-50
+
+FLOAT_TYPE_EXPONENT = {
+  "real":-37,
+  "double":MAX_EXPONENT,
+  "decfloat":MAX_EXPONENT,
+}
+
+DECIMAL_TYPES = set(
     [
-        "decfloat",
-        "double",
-        "float",
-        "money",
+        "decimal",
+        "numeric"
     ]
 )
 
 DATETIME_TYPES = set(
     [
-        "date",
-        "datetime",
-        "datetime2",
-        "smalldatetime",
-        "time",
         "timestamp",
     ]
 )
 
-VARIANT_TYPES = set(["json"])
+DATE_TYPES = set(
+        [
+            "date",
+        ]
+)
 
+def default_date_format():
+    return False
 
-def schema_for_column(c):
+def default_offset_value():
+    """
+    Function included to remain consistent with MSSQL tap using a False-returning function
+    for default_date_format
+    """
+    return False
+  
+def default_singer_decimal():
+    """
+    singer_decimal can be enabled in the the config, which will use singer.decimal as a format and string as the type
+    use this for large/precise numbers
+    """
+    return False
+
+def schema_for_column(c,config):
     """Returns the Schema object for the given Column."""
     data_type = c.data_type.strip().lower()
 
     inclusion = "available"
 
+    use_date_data_type_format = config.get('use_date_datatype') or default_date_format()
+    use_singer_decimal = config.get('use_singer_decimal') or default_singer_decimal()
+
     if c.is_primary_key == 1:
         inclusion = "automatic"
 
     result = Schema(inclusion=inclusion)
+    
+    # the tap-oracle behaviour:
+    # integer (small/big/normal) to integer - sysmaxsize can hold all these
+    # all decimals, floats and numerics to number/singer.decimal
+    # number with no c.numeric_scale to integer
 
-    if data_type == "bit":
-        result.type = ["null", "boolean"]
-
-    elif data_type in BYTES_FOR_INTEGER_TYPE:
+    if data_type in BYTES_FOR_INTEGER_TYPE:
         result.type = ["null", "integer"]
         bits = BYTES_FOR_INTEGER_TYPE[data_type] * 8
         result.minimum = 0 - 2 ** (bits - 1)
         result.maximum = 2 ** (bits - 1) - 1
 
-    elif data_type in FLOAT_TYPES:
-        result.type = ["null", "number"]
-        result.multipleOf = 10 ** (0 - (c.numeric_scale or 6))
+    elif data_type in FLOAT_TYPE_EXPONENT:
+        if use_singer_decimal:
+            result.type = ["null","number"]
+            result.format = "singer.decimal"
+        else:
+            result.type = ["null", "number"]
+            # Testing on DB2 LUW v10.5 showed that large DECFLOAT(16) values were not handled correctly
+            if c.character_maximum_length == 8 and data_type == 'decfloat':
+                LOGGER.warning(f"DECFLOAT(16) - (length=8) - values > 10^16 are not handled correctly (table={c.table_name} column={c.column_name})")
+            result.multipleOf = 10 ** (0 - (c.numeric_scale or FLOAT_TYPE_EXPONENT[data_type]*-1))
 
-    elif data_type in ["decimal", "numeric"]:
-        result.type = ["null", "number"]
-        result.multipleOf = 10 ** (0 - c.numeric_scale)
-        return result
+    elif data_type in DECIMAL_TYPES:
+        if use_singer_decimal:
+            result.type = ["null","number"]
+            result.format = "singer.decimal"
+            result.additionalProperties = {"scale_precision": f"({c.character_maximum_length},{c.numeric_scale})"}
+        else:
+            result.type = ["null", "number"]
+            # Numeric scale is directly determined by the numeric_scale value
+            # zero is a valid value - if scale = 0 then the column does not accept decimals
+            # so 10^0 = 1 is the multipleOf
+            result.multipleOf = 10 ** (0 - (c.numeric_scale))
 
     elif data_type in STRING_TYPES:
         result.type = ["null", "string"]
@@ -142,8 +192,12 @@ def schema_for_column(c):
         result.type = ["null", "string"]
         result.format = "date-time"
 
-    elif data_type in VARIANT_TYPES:
-        result.type = ["null", "object"]
+    elif data_type in DATE_TYPES:
+        result.type = ["null","string"]
+        if use_date_data_type_format:
+            result.format = "date"
+        else:
+            result.format = "date-time"
 
     else:
         result = Schema(
@@ -154,11 +208,11 @@ def schema_for_column(c):
     return result
 
 
-def create_column_metadata(cols):
+def create_column_metadata(cols, config):
     mdata = {}
     mdata = metadata.write(mdata, (), "selected-by-default", False)
     for c in cols:
-        schema = schema_for_column(c)
+        schema = schema_for_column(c, config)
         mdata = metadata.write(
             mdata,
             ("properties", c.column_name),
@@ -181,10 +235,11 @@ def discover_catalog(mssql_conn, config):
 
     with mssql_conn.connect() as open_conn:
         LOGGER.info("Fetching tables")
+        # Query for LUW DB2 instances only - SYSCAT may not exist on Z/OS
         tables_results = open_conn.execute(
             """
             SELECT
-                TABSCHEMA AS TABLE_SCHEMA,
+                RTRIM(TABSCHEMA) AS TABLE_SCHEMA,
                 TABNAME AS TABLE_NAME,
                 TYPE AS TABLE_TYPE
             FROM SYSCAT.TABLES t
@@ -209,26 +264,35 @@ def discover_catalog(mssql_conn, config):
                 "is_view": table_type == "V",
             }
 
-            LOGGER.info(table_info)
+            LOGGER.debug(f"Schema: {db}, Table: {table}")
+            # Previously this would dump the entire catalog each loop
+            # this will only dump the current table info
+            LOGGER.debug(table_info[db][table])
+            
         LOGGER.info("Tables fetched, fetching columns")
+
+        # Query for LUW DB2 instances only - SYSCAT may not exist on Z/OS
         column_results = open_conn.execute(
             """
             SELECT
-                t.TABSCHEMA AS TABLE_SCHEMA,
+                RTRIM(t.TABSCHEMA) AS TABLE_SCHEMA,
                 t.TABNAME AS TABLE_NAME,
-                s.NAME AS COLUMN_NAME,
-                s.COLTYPE AS DATA_TYPE,
-                s.LENGTH AS CHARACTER_MAXIMUM_LENGTH,
-                s.LONGLENGTH AS NUMERIC_PRECISION,
-                s.SCALE AS NUMERIC_SCALE,
+                c.COLNAME AS COLUMN_NAME,
+                c.TYPENAME AS DATA_TYPE,
+                c.LENGTH AS CHARACTER_MAXIMUM_LENGTH,
+                c."SCALE" AS NUMERIC_SCALE,
                 CASE
-                    WHEN s.KEYSEQ IS NOT NULL THEN 1
+                    WHEN c.KEYSEQ IS NOT NULL THEN 1
                     ELSE 0
                 END AS IS_PRIMARY_KEY
-            FROM SYSIBM.SYSCOLUMNS s
-            LEFT JOIN SYSCAT.TABLES t
-            ON s.TBNAME = t.TABNAME
+            FROM 
+            SYSCAT.TABLES t
+            LEFT JOIN 
+            SYSCAT.COLUMNS c
+            ON c.TABNAME = t.TABNAME 
+            AND c.TABSCHEMA = t.TABSCHEMA 
             WHERE t.TABSCHEMA NOT LIKE 'SYS%'
+            ORDER BY t.TABSCHEMA,t.TABNAME,c.COLNO;
             """
         )
         columns = []
@@ -246,9 +310,9 @@ def discover_catalog(mssql_conn, config):
             (table_schema, table_name) = k
             schema = Schema(
                 type="object",
-                properties={c.column_name: schema_for_column(c) for c in cols},
+                properties={c.column_name: schema_for_column(c, config) for c in cols},
             )
-            md = create_column_metadata(cols)
+            md = create_column_metadata(cols, config)
             md_map = metadata.to_map(md)
 
             md_map = metadata.write(md_map, (), "database-name", table_schema)
@@ -706,16 +770,30 @@ def do_sync(mssql_conn, config, catalog, state):
 
 def log_server_params(mssql_conn):
     with mssql_conn.connect() as open_conn:
+        #
+        # https://stackoverflow.com/questions/3821795/how-to-check-db2-version
+        # two approaches possible - TABLE(sysproc.env_get_inst_info())
+        #                      or - SYSIBMADM.ENV_INST_INFO
+        server_parameters=[
+                'INST_NAME',
+                'IS_INST_PARTITIONABLE',
+                'NUM_DBPARTITIONS',
+                'INST_PTR_SIZE',
+                'RELEASE_NUM',
+                'SERVICE_LEVEL',
+                'BLD_LEVEL',
+                'PTF',
+                'FIXPACK_NUM',
+                'NUM_MEMBERS'
+                ]
         try:
             row = open_conn.execute(
                 """
-                SELECT
-                    @@VERSION as version,
-                    @@lock_timeout as lock_wait_timeout
-                """
+                   SELECT {} FROM SYSIBMADM.ENV_INST_INFO
+                """.format(','.join(server_parameters))
             )
             LOGGER.info(
-                "Server Parameters: " + "version: %s, " + "lock_timeout: %s, ",
+                    "Server Parameters: " + ', '.join([p+': %s' for p in server_parameters]),
                 *row.fetchone(),
             )
         except Exception as e:

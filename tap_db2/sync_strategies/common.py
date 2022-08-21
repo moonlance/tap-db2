@@ -23,7 +23,6 @@ def escape(string):
         )
     return '"' + string + '"'
 
-
 def set_schema_mapping(config, stream):
     schema_mapping = config.get("include_schemas_in_destination_stream_name")
 
@@ -101,23 +100,37 @@ def generate_select_sql(catalog_entry, columns):
     select_sql = select_sql.replace("%", "%%")
     return select_sql
 
+def default_date_format():
+    return False
+
+def default_offset_value():
+    """
+    Function included to remain consistent with MSSQL tap using a False-returning function
+    for default_date_format
+    """
+    return False
 
 def row_to_singer_record(
-    catalog_entry, version, table_stream, row, columns, time_extracted
+    catalog_entry, version, table_stream, row, columns, time_extracted, config
 ):
     row_to_persist = ()
+    use_date_data_type_format = config.get("use_date_datatype") or default_date_format()
     md_map = metadata.to_map(catalog_entry.metadata)
     md_map[("properties", "_sdc_deleted_at")] = {
         "sql-datatype": "datetime"  # maybe datetimeoffset??
     }
     for idx, elem in enumerate(row):
-        # property_type = catalog_entry.schema.properties[columns[idx]].type
-        property_type = md_map.get(("properties", columns[idx])).get("sql-datatype")
+        property_type = catalog_entry.schema.properties[columns[idx]].type
+        sql_data_type = md_map.get(("properties", columns[idx])).get("sql-datatype")
+        property_format = catalog_entry.schema.properties[columns[idx]].format
         if isinstance(elem, datetime.datetime):
             row_to_persist += (elem.isoformat() + "+00:00",)
 
         elif isinstance(elem, datetime.date):
-            row_to_persist += (elem.isoformat() + "T00:00:00+00:00",)
+            if use_date_data_type_format:
+                row_to_persist += (elem.isoformat(),)
+            else:
+                row_to_persist += (elem.isoformat() + "T00:00:00+00:00",)
 
         elif isinstance(elem, datetime.timedelta):
             epoch = datetime.datetime.utcfromtimestamp(0)
@@ -125,7 +138,7 @@ def row_to_singer_record(
             row_to_persist += (timedelta_from_epoch.isoformat() + "+00:00",)
 
         elif isinstance(elem, bytes):
-            if property_type in ["binary", "varbinary"]:
+            if sql_data_type in ["binary", "varbinary"]:
                 # Convert binary byte array to hex string‘
                 hex_representation = f"0x{elem.hex().upper()}"
                 row_to_persist += (hex_representation,)
@@ -134,7 +147,7 @@ def row_to_singer_record(
                 boolean_representation = elem != b"\x00"
                 row_to_persist += (boolean_representation,)
 
-        elif "boolean" in property_type or property_type == "boolean":
+        elif "boolean" in sql_data_type or sql_data_type == "boolean":
             if elem is None:
                 boolean_representation = None
             elif elem == 0:
@@ -144,6 +157,10 @@ def row_to_singer_record(
             row_to_persist += (boolean_representation,)
         elif isinstance(elem, uuid.UUID):
             row_to_persist += (str(elem),)
+        
+        elif property_format == 'singer.decimal':
+            row_to_persist += (str(elem),)
+            
         else:
             row_to_persist += (elem,)
     rec = dict(zip(columns, row_to_persist))
@@ -176,6 +193,7 @@ def sync_query(
     stream_version,
     table_stream,
     params,
+    config,
 ):
     replication_key = singer.get_bookmark(
         state, catalog_entry.tap_stream_id, "replication_key"
@@ -187,6 +205,7 @@ def sync_query(
     if len(params) == 0:
         results = cursor.execute(select_sql)
     else:
+        LOGGER.info(params["replication_key_value"])
         results = cursor.execute(select_sql, params["replication_key_value"])
     row = results.fetchone()
     rows_saved = 0
@@ -207,6 +226,7 @@ def sync_query(
                 row,
                 columns,
                 time_extracted,
+                config,
             )
             singer.write_message(record_message)
             md_map = metadata.to_map(catalog_entry.metadata)
