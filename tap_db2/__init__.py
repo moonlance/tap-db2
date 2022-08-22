@@ -113,9 +113,13 @@ DATETIME_TYPES = set(
     ]
 )
 
-DATE_TYPES = set(
-        [
+DATE_TYPES = set([
             "date",
+        ]
+)
+
+TIME_TYPES = set([
+            "time",
         ]
 )
 
@@ -208,7 +212,14 @@ def schema_for_column(c,config):
             result.format = "date"
         else:
             result.format = "date-time"
-
+            
+    elif data_type in TIME_TYPES:
+        result.type = ["null", "string"]
+        if use_date_data_type_format:
+            result.format = "time"
+        else:
+            result.format = "date-time"
+            
     else:
         result = Schema(
             None,
