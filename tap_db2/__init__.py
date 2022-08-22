@@ -155,7 +155,10 @@ def schema_for_column(c,config):
     # all decimals, floats and numerics to number/singer.decimal
     # number with no c.numeric_scale to integer
 
-    if data_type in BYTES_FOR_INTEGER_TYPE:
+    if data_type in ["boolean","bit"]:
+        result.type = ["null","boolean"]
+
+    elif data_type in BYTES_FOR_INTEGER_TYPE:
         result.type = ["null", "integer"]
         bits = BYTES_FOR_INTEGER_TYPE[data_type] * 8
         result.minimum = 0 - 2 ** (bits - 1)
