@@ -239,11 +239,11 @@ def create_column_metadata(cols, config):
     return metadata.to_list(mdata)
 
 
-def discover_catalog(mssql_conn, config):
+def discover_catalog(db2_conn, config):
     """Returns a Catalog describing the structure of the database."""
     LOGGER.info("Preparing Catalog")
 
-    with mssql_conn.connect() as open_conn:
+    with db2_conn.connect() as open_conn:
         LOGGER.info("Fetching tables")
         # Query for LUW DB2 instances only - SYSCAT may not exist on Z/OS
         tables_results = open_conn.execute(
@@ -365,8 +365,8 @@ def discover_catalog(mssql_conn, config):
     return Catalog(entries)
 
 
-def do_discover(mssql_conn, config):
-    discover_catalog(mssql_conn, config).dump()
+def do_discover(db2_conn, config):
+    discover_catalog(db2_conn, config).dump()
 
 
 # TODO: Maybe put in a singer-db-utils library.
@@ -472,7 +472,7 @@ def resolve_catalog(discovered_catalog, streams_to_sync):
     return result
 
 
-def get_non_binlog_streams(mssql_conn, catalog, config, state):
+def get_non_binlog_streams(db2_conn, catalog, config, state):
     """Returns the Catalog of data we're going to sync for all SELECT-based
     streams (i.e. INCREMENTAL, FULL_TABLE, and LOG_BASED that require a
     historical sync). LOG_BASED streams that require a historical sync are
@@ -492,7 +492,7 @@ def get_non_binlog_streams(mssql_conn, catalog, config, state):
       3. any streams that do not have a replication method of LOG_BASED
 
     """
-    discovered = discover_catalog(mssql_conn, config)
+    discovered = discover_catalog(db2_conn, config)
 
     # Filter catalog to include only selected streams
     selected_streams = list(
@@ -552,8 +552,8 @@ def get_non_binlog_streams(mssql_conn, catalog, config, state):
     return resolve_catalog(discovered, streams_to_sync)
 
 
-def get_binlog_streams(mssql_conn, catalog, config, state):
-    discovered = discover_catalog(mssql_conn, config)
+def get_binlog_streams(db2_conn, catalog, config, state):
+    discovered = discover_catalog(db2_conn, config)
 
     # selected_streams = list(
     #     filter(lambda s: common.stream_is_selected(s), catalog.streams)
@@ -585,7 +585,7 @@ def write_schema_message(config, catalog_entry, bookmark_properties=[]):
     )
 
 
-def do_sync_incremental(mssql_conn, config, catalog_entry, state, columns):
+def do_sync_incremental(db2_conn, config, catalog_entry, state, columns):
     md_map = metadata.to_map(catalog_entry.metadata)
     # stream_version = common.get_stream_version(
     #     catalog_entry.tap_stream_id, state
@@ -598,12 +598,12 @@ def do_sync_incremental(mssql_conn, config, catalog_entry, state, columns):
         bookmark_properties=[replication_key],
     )
     LOGGER.info("Schema written")
-    incremental.sync_table(mssql_conn, config, catalog_entry, state, columns)
+    incremental.sync_table(db2_conn, config, catalog_entry, state, columns)
 
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
 
-def do_sync_full_table(mssql_conn, config, catalog_entry, state, columns):
+def do_sync_full_table(db2_conn, config, catalog_entry, state, columns):
     # key_properties = common.get_key_properties(catalog_entry)
 
     write_schema_message(config, catalog_entry)
@@ -613,7 +613,7 @@ def do_sync_full_table(mssql_conn, config, catalog_entry, state, columns):
     )
 
     full_table.sync_table(
-        mssql_conn, config, catalog_entry, state, columns, stream_version
+        db2_conn, config, catalog_entry, state, columns, stream_version
     )
 
     # Prefer initial_full_table_complete going forward
@@ -626,7 +626,7 @@ def do_sync_full_table(mssql_conn, config, catalog_entry, state, columns):
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
 
-def do_sync_log_based_table(mssql_conn, config, catalog_entry, state, columns):
+def do_sync_log_based_table(db2_conn, config, catalog_entry, state, columns):
 
     # key_properties = common.get_key_properties(catalog_entry)
     state = singer.set_currently_syncing(state, catalog_entry.tap_stream_id)
@@ -638,7 +638,7 @@ def do_sync_log_based_table(mssql_conn, config, catalog_entry, state, columns):
 
     # initial instance of log_based connector class
     log_based = logical.log_based_sync(
-        mssql_conn, config, catalog_entry, state, columns
+        db2_conn, config, catalog_entry, state, columns
     )
 
     # assert all of the log_based prereq's are met
@@ -668,7 +668,7 @@ def do_sync_log_based_table(mssql_conn, config, catalog_entry, state, columns):
     initial_load = log_based.log_based_initial_full_table()
 
     if initial_load:
-        do_sync_full_table(mssql_conn, config, catalog_entry, state, columns)
+        do_sync_full_table(db2_conn, config, catalog_entry, state, columns)
         state = singer.write_bookmark(
             state,
             catalog_entry.tap_stream_id,
@@ -689,7 +689,7 @@ def do_sync_log_based_table(mssql_conn, config, catalog_entry, state, columns):
         log_based.execute_log_based_sync()
 
 
-def sync_non_binlog_streams(mssql_conn, non_binlog_catalog, config, state):
+def sync_non_binlog_streams(db2_conn, non_binlog_catalog, config, state):
 
     for catalog_entry in non_binlog_catalog.streams:
         columns = list(catalog_entry.schema.properties.keys())
@@ -743,12 +743,12 @@ def sync_non_binlog_streams(mssql_conn, non_binlog_catalog, config, state):
             if replication_method == "INCREMENTAL":
                 LOGGER.info(f"syncing {catalog_entry.table} incrementally")
                 do_sync_incremental(
-                    mssql_conn, config, catalog_entry, state, columns
+                    db2_conn, config, catalog_entry, state, columns
                 )
             elif replication_method == "FULL_TABLE":
                 LOGGER.info(f"syncing {catalog_entry.table} full table")
                 do_sync_full_table(
-                    mssql_conn, config, catalog_entry, state, columns
+                    db2_conn, config, catalog_entry, state, columns
                 )
             elif replication_method == "LOG_BASED":
                 LOGGER.info(
@@ -756,7 +756,7 @@ def sync_non_binlog_streams(mssql_conn, non_binlog_catalog, config, state):
                     "LOG_BASED"
                 )
                 do_sync_log_based_table(
-                    mssql_conn, config, catalog_entry, state, columns
+                    db2_conn, config, catalog_entry, state, columns
                 )
             else:
                 raise Exception(
@@ -768,18 +768,18 @@ def sync_non_binlog_streams(mssql_conn, non_binlog_catalog, config, state):
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
 
-def do_sync(mssql_conn, config, catalog, state):
+def do_sync(db2_conn, config, catalog, state):
     LOGGER.info("Beginning sync")
     non_binlog_catalog = get_non_binlog_streams(
-        mssql_conn, catalog, config, state
+        db2_conn, catalog, config, state
     )
     for entry in non_binlog_catalog.streams:
         LOGGER.info(f"Need to sync {entry.table}")
-    sync_non_binlog_streams(mssql_conn, non_binlog_catalog, config, state)
+    sync_non_binlog_streams(db2_conn, non_binlog_catalog, config, state)
 
 
-def log_server_params(mssql_conn):
-    with mssql_conn.connect() as open_conn:
+def log_server_params(db2_conn):
+    with db2_conn.connect() as open_conn:
         #
         # https://stackoverflow.com/questions/3821795/how-to-check-db2-version
         # two approaches possible - TABLE(sysproc.env_get_inst_info())
@@ -815,18 +815,18 @@ def log_server_params(mssql_conn):
 
 def main_impl():
     args = utils.parse_args(REQUIRED_CONFIG_KEYS)
-    mssql_conn = get_db2_sql_engine(args.config)
-    log_server_params(mssql_conn)
+    db2_conn = get_db2_sql_engine(args.config)
+    log_server_params(db2_conn)
 
     if args.discover:
-        do_discover(mssql_conn, args.config)
+        do_discover(db2_conn, args.config)
     elif args.catalog:
         state = args.state or {}
-        do_sync(mssql_conn, args.config, args.catalog, state)
+        do_sync(db2_conn, args.config, args.catalog, state)
     elif args.properties:
         catalog = Catalog.from_dict(args.properties)
         state = args.state or {}
-        do_sync(mssql_conn, args.config, catalog, state)
+        do_sync(db2_conn, args.config, catalog, state)
     else:
         LOGGER.info("No properties were selected")
 
