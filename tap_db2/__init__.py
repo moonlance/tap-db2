@@ -26,7 +26,7 @@ import tap_db2.sync_strategies.logical as logical
 
 from tap_db2.connection import (
     # connect_with_backoff,
-    get_azure_sql_engine,
+    get_db2_sql_engine,
 )
 
 
@@ -38,7 +38,6 @@ Column = collections.namedtuple(
         "column_name",
         "data_type",
         "character_maximum_length",
-        "numeric_precision",
         "numeric_scale",
         "is_primary_key",
     ],
@@ -56,68 +55,112 @@ LOGGER = singer.get_logger()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# Define data types
+
+# Full list
+#BIGINT - i
+#BLOB - ignore for now
+#CHARACTER - s
+#CLOB - ignore for now
+#DATE - d
+#DECIMAL - f
+#DOUBLE - f
+#INTEGER - i
+#SMALLINT - i
+#TIMESTAMP - d
+#VARCHAR - s
+#XML - s
+
 STRING_TYPES = set(
     [
-        "binary",
         "char",
-        "enum",
-        "longtext",
-        "mediumtext",
-        "nchar",
-        "nvarchar",
-        "text",
-        "uniqueidentifier",
-        "varbinary",
+        "character",
         "varchar",
+        "xml",
     ]
 )
 
 BYTES_FOR_INTEGER_TYPE = {
-    "tinyint": 1,
     "smallint": 2,
-    "mediumint": 3,
-    "int": 4,
     "integer": 4,
-    "real": 4,
+    "int": 4,
     "bigint": 8,
 }
 
-FLOAT_TYPES = set(
+# REAL -37
+# DOUBLE -307
+# DECFLOAT(16/8) -383
+# DECFLOAT(34/16) -6143
+# For practicality this will be limited to -50
+MAX_EXPONENT=-50
+
+FLOAT_TYPE_EXPONENT = {
+  "real":-37,
+  "double":MAX_EXPONENT,
+  "decfloat":MAX_EXPONENT,
+}
+
+DECIMAL_TYPES = set(
     [
-        "decfloat",
-        "double",
-        "float",
-        "money",
+        "decimal",
+        "numeric"
     ]
 )
 
 DATETIME_TYPES = set(
     [
-        "date",
-        "datetime",
-        "datetime2",
-        "smalldatetime",
-        "time",
         "timestamp",
     ]
 )
 
-VARIANT_TYPES = set(["json"])
+DATE_TYPES = set([
+            "date",
+        ]
+)
 
+TIME_TYPES = set([
+            "time",
+        ]
+)
 
-def schema_for_column(c):
+def default_date_format():
+    return False
+
+def default_offset_value():
+    """
+    Function included to remain consistent with MSSQL tap using a False-returning function
+    for default_date_format
+    """
+    return False
+  
+def default_singer_decimal():
+    """
+    singer_decimal can be enabled in the the config, which will use singer.decimal as a format and string as the type
+    use this for large/precise numbers
+    """
+    return False
+
+def schema_for_column(c,config):
     """Returns the Schema object for the given Column."""
     data_type = c.data_type.strip().lower()
 
     inclusion = "available"
 
+    use_date_data_type_format = config.get('use_date_datatype') or default_date_format()
+    use_singer_decimal = config.get('use_singer_decimal') or default_singer_decimal()
+
     if c.is_primary_key == 1:
         inclusion = "automatic"
 
     result = Schema(inclusion=inclusion)
+    
+    # the tap-oracle behaviour:
+    # integer (small/big/normal) to integer - sysmaxsize can hold all these
+    # all decimals, floats and numerics to number/singer.decimal
+    # number with no c.numeric_scale to integer
 
-    if data_type == "bit":
-        result.type = ["null", "boolean"]
+    if data_type in ["boolean","bit"]:
+        result.type = ["null","boolean"]
 
     elif data_type in BYTES_FOR_INTEGER_TYPE:
         result.type = ["null", "integer"]
@@ -125,14 +168,35 @@ def schema_for_column(c):
         result.minimum = 0 - 2 ** (bits - 1)
         result.maximum = 2 ** (bits - 1) - 1
 
-    elif data_type in FLOAT_TYPES:
-        result.type = ["null", "number"]
-        result.multipleOf = 10 ** (0 - (c.numeric_scale or 6))
-
-    elif data_type in ["decimal", "numeric"]:
-        result.type = ["null", "number"]
-        result.multipleOf = 10 ** (0 - c.numeric_scale)
-        return result
+    # NB: Due to scale and precision variations among numeric types,
+    #     we're using a custom `singer.decimal` string formatter 
+    #     for this, with no opinion on scale/precision.
+    elif data_type in FLOAT_TYPE_EXPONENT:
+        if use_singer_decimal:
+            result.type = ["null","string"]
+            result.format = "singer.decimal"
+        else:
+            result.type = ["null", "number"]
+            # Testing on DB2 LUW v10.5 showed that large DECFLOAT(16) values were not handled correctly
+            if c.character_maximum_length == 8 and data_type == 'decfloat':
+                LOGGER.warning(f"DECFLOAT(16) - (length=8) - values > 10^16 are not handled correctly (table={c.table_name} column={c.column_name})")
+            result.multipleOf = 10 ** (0 - (c.numeric_scale or FLOAT_TYPE_EXPONENT[data_type]*-1))
+    
+    # NB: Scale and precision can be obtained from the dictionary views on DB2
+    #     it is useful for the target/loader to be able to access this info
+    #     specifically for decimal types so it can use the values as provided
+    #     it is difficult to determine scale/precision from the singer multipleOf attribute
+    elif data_type in DECIMAL_TYPES:
+        if use_singer_decimal:
+            result.type = ["null","number"]
+            result.format = "singer.decimal"
+            result.additionalProperties = {"scale_precision": f"({c.character_maximum_length},{c.numeric_scale})"}
+        else:
+            result.type = ["null", "number"]
+            # Numeric scale is directly determined by the numeric_scale value
+            # zero is a valid value - if scale = 0 then the column does not accept decimals
+            # so 10^0 = 1 is the multipleOf
+            result.multipleOf = 10 ** (0 - (c.numeric_scale))
 
     elif data_type in STRING_TYPES:
         result.type = ["null", "string"]
@@ -142,9 +206,20 @@ def schema_for_column(c):
         result.type = ["null", "string"]
         result.format = "date-time"
 
-    elif data_type in VARIANT_TYPES:
-        result.type = ["null", "object"]
-
+    elif data_type in DATE_TYPES:
+        result.type = ["null","string"]
+        if use_date_data_type_format:
+            result.format = "date"
+        else:
+            result.format = "date-time"
+            
+    elif data_type in TIME_TYPES:
+        result.type = ["null", "string"]
+        if use_date_data_type_format:
+            result.format = "time"
+        else:
+            result.format = "date-time"
+            
     else:
         result = Schema(
             None,
@@ -154,11 +229,11 @@ def schema_for_column(c):
     return result
 
 
-def create_column_metadata(cols):
+def create_column_metadata(cols, config):
     mdata = {}
     mdata = metadata.write(mdata, (), "selected-by-default", False)
     for c in cols:
-        schema = schema_for_column(c)
+        schema = schema_for_column(c, config)
         mdata = metadata.write(
             mdata,
             ("properties", c.column_name),
@@ -175,16 +250,17 @@ def create_column_metadata(cols):
     return metadata.to_list(mdata)
 
 
-def discover_catalog(mssql_conn, config):
+def discover_catalog(db2_conn, config):
     """Returns a Catalog describing the structure of the database."""
     LOGGER.info("Preparing Catalog")
 
-    with mssql_conn.connect() as open_conn:
+    with db2_conn.connect() as open_conn:
         LOGGER.info("Fetching tables")
+        # Query for LUW DB2 instances only - SYSCAT may not exist on Z/OS
         tables_results = open_conn.execute(
             """
             SELECT
-                TABSCHEMA AS TABLE_SCHEMA,
+                RTRIM(TABSCHEMA) AS TABLE_SCHEMA,
                 TABNAME AS TABLE_NAME,
                 TYPE AS TABLE_TYPE
             FROM SYSCAT.TABLES t
@@ -209,26 +285,35 @@ def discover_catalog(mssql_conn, config):
                 "is_view": table_type == "V",
             }
 
-            LOGGER.info(table_info)
+            LOGGER.debug(f"Schema: {db}, Table: {table}")
+            # Previously this would dump the entire catalog each loop
+            # this will only dump the current table info
+            LOGGER.debug(table_info[db][table])
+            
         LOGGER.info("Tables fetched, fetching columns")
+
+        # Query for LUW DB2 instances only - SYSCAT may not exist on Z/OS
         column_results = open_conn.execute(
             """
             SELECT
-                t.TABSCHEMA AS TABLE_SCHEMA,
+                RTRIM(t.TABSCHEMA) AS TABLE_SCHEMA,
                 t.TABNAME AS TABLE_NAME,
-                s.NAME AS COLUMN_NAME,
-                s.COLTYPE AS DATA_TYPE,
-                s.LENGTH AS CHARACTER_MAXIMUM_LENGTH,
-                s.LONGLENGTH AS NUMERIC_PRECISION,
-                s.SCALE AS NUMERIC_SCALE,
+                c.COLNAME AS COLUMN_NAME,
+                c.TYPENAME AS DATA_TYPE,
+                c.LENGTH AS CHARACTER_MAXIMUM_LENGTH,
+                c."SCALE" AS NUMERIC_SCALE,
                 CASE
-                    WHEN s.KEYSEQ IS NOT NULL THEN 1
+                    WHEN c.KEYSEQ IS NOT NULL THEN 1
                     ELSE 0
                 END AS IS_PRIMARY_KEY
-            FROM SYSIBM.SYSCOLUMNS s
-            LEFT JOIN SYSCAT.TABLES t
-            ON s.TBNAME = t.TABNAME
+            FROM 
+            SYSCAT.TABLES t
+            LEFT JOIN 
+            SYSCAT.COLUMNS c
+            ON c.TABNAME = t.TABNAME 
+            AND c.TABSCHEMA = t.TABSCHEMA 
             WHERE t.TABSCHEMA NOT LIKE 'SYS%'
+            ORDER BY t.TABSCHEMA,t.TABNAME,c.COLNO;
             """
         )
         columns = []
@@ -246,9 +331,9 @@ def discover_catalog(mssql_conn, config):
             (table_schema, table_name) = k
             schema = Schema(
                 type="object",
-                properties={c.column_name: schema_for_column(c) for c in cols},
+                properties={c.column_name: schema_for_column(c, config) for c in cols},
             )
-            md = create_column_metadata(cols)
+            md = create_column_metadata(cols, config)
             md_map = metadata.to_map(md)
 
             md_map = metadata.write(md_map, (), "database-name", table_schema)
@@ -291,8 +376,8 @@ def discover_catalog(mssql_conn, config):
     return Catalog(entries)
 
 
-def do_discover(mssql_conn, config):
-    discover_catalog(mssql_conn, config).dump()
+def do_discover(db2_conn, config):
+    discover_catalog(db2_conn, config).dump()
 
 
 # TODO: Maybe put in a singer-db-utils library.
@@ -398,7 +483,7 @@ def resolve_catalog(discovered_catalog, streams_to_sync):
     return result
 
 
-def get_non_binlog_streams(mssql_conn, catalog, config, state):
+def get_non_binlog_streams(db2_conn, catalog, config, state):
     """Returns the Catalog of data we're going to sync for all SELECT-based
     streams (i.e. INCREMENTAL, FULL_TABLE, and LOG_BASED that require a
     historical sync). LOG_BASED streams that require a historical sync are
@@ -418,7 +503,7 @@ def get_non_binlog_streams(mssql_conn, catalog, config, state):
       3. any streams that do not have a replication method of LOG_BASED
 
     """
-    discovered = discover_catalog(mssql_conn, config)
+    discovered = discover_catalog(db2_conn, config)
 
     # Filter catalog to include only selected streams
     selected_streams = list(
@@ -478,8 +563,8 @@ def get_non_binlog_streams(mssql_conn, catalog, config, state):
     return resolve_catalog(discovered, streams_to_sync)
 
 
-def get_binlog_streams(mssql_conn, catalog, config, state):
-    discovered = discover_catalog(mssql_conn, config)
+def get_binlog_streams(db2_conn, catalog, config, state):
+    discovered = discover_catalog(db2_conn, config)
 
     # selected_streams = list(
     #     filter(lambda s: common.stream_is_selected(s), catalog.streams)
@@ -511,7 +596,7 @@ def write_schema_message(config, catalog_entry, bookmark_properties=[]):
     )
 
 
-def do_sync_incremental(mssql_conn, config, catalog_entry, state, columns):
+def do_sync_incremental(db2_conn, config, catalog_entry, state, columns):
     md_map = metadata.to_map(catalog_entry.metadata)
     # stream_version = common.get_stream_version(
     #     catalog_entry.tap_stream_id, state
@@ -524,12 +609,12 @@ def do_sync_incremental(mssql_conn, config, catalog_entry, state, columns):
         bookmark_properties=[replication_key],
     )
     LOGGER.info("Schema written")
-    incremental.sync_table(mssql_conn, config, catalog_entry, state, columns)
+    incremental.sync_table(db2_conn, config, catalog_entry, state, columns)
 
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
 
-def do_sync_full_table(mssql_conn, config, catalog_entry, state, columns):
+def do_sync_full_table(db2_conn, config, catalog_entry, state, columns):
     # key_properties = common.get_key_properties(catalog_entry)
 
     write_schema_message(config, catalog_entry)
@@ -539,7 +624,7 @@ def do_sync_full_table(mssql_conn, config, catalog_entry, state, columns):
     )
 
     full_table.sync_table(
-        mssql_conn, config, catalog_entry, state, columns, stream_version
+        db2_conn, config, catalog_entry, state, columns, stream_version
     )
 
     # Prefer initial_full_table_complete going forward
@@ -552,7 +637,7 @@ def do_sync_full_table(mssql_conn, config, catalog_entry, state, columns):
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
 
-def do_sync_log_based_table(mssql_conn, config, catalog_entry, state, columns):
+def do_sync_log_based_table(db2_conn, config, catalog_entry, state, columns):
 
     # key_properties = common.get_key_properties(catalog_entry)
     state = singer.set_currently_syncing(state, catalog_entry.tap_stream_id)
@@ -564,7 +649,7 @@ def do_sync_log_based_table(mssql_conn, config, catalog_entry, state, columns):
 
     # initial instance of log_based connector class
     log_based = logical.log_based_sync(
-        mssql_conn, config, catalog_entry, state, columns
+        db2_conn, config, catalog_entry, state, columns
     )
 
     # assert all of the log_based prereq's are met
@@ -594,7 +679,7 @@ def do_sync_log_based_table(mssql_conn, config, catalog_entry, state, columns):
     initial_load = log_based.log_based_initial_full_table()
 
     if initial_load:
-        do_sync_full_table(mssql_conn, config, catalog_entry, state, columns)
+        do_sync_full_table(db2_conn, config, catalog_entry, state, columns)
         state = singer.write_bookmark(
             state,
             catalog_entry.tap_stream_id,
@@ -615,7 +700,7 @@ def do_sync_log_based_table(mssql_conn, config, catalog_entry, state, columns):
         log_based.execute_log_based_sync()
 
 
-def sync_non_binlog_streams(mssql_conn, non_binlog_catalog, config, state):
+def sync_non_binlog_streams(db2_conn, non_binlog_catalog, config, state):
 
     for catalog_entry in non_binlog_catalog.streams:
         columns = list(catalog_entry.schema.properties.keys())
@@ -669,12 +754,12 @@ def sync_non_binlog_streams(mssql_conn, non_binlog_catalog, config, state):
             if replication_method == "INCREMENTAL":
                 LOGGER.info(f"syncing {catalog_entry.table} incrementally")
                 do_sync_incremental(
-                    mssql_conn, config, catalog_entry, state, columns
+                    db2_conn, config, catalog_entry, state, columns
                 )
             elif replication_method == "FULL_TABLE":
                 LOGGER.info(f"syncing {catalog_entry.table} full table")
                 do_sync_full_table(
-                    mssql_conn, config, catalog_entry, state, columns
+                    db2_conn, config, catalog_entry, state, columns
                 )
             elif replication_method == "LOG_BASED":
                 LOGGER.info(
@@ -682,7 +767,7 @@ def sync_non_binlog_streams(mssql_conn, non_binlog_catalog, config, state):
                     "LOG_BASED"
                 )
                 do_sync_log_based_table(
-                    mssql_conn, config, catalog_entry, state, columns
+                    db2_conn, config, catalog_entry, state, columns
                 )
             else:
                 raise Exception(
@@ -694,28 +779,42 @@ def sync_non_binlog_streams(mssql_conn, non_binlog_catalog, config, state):
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
 
-def do_sync(mssql_conn, config, catalog, state):
+def do_sync(db2_conn, config, catalog, state):
     LOGGER.info("Beginning sync")
     non_binlog_catalog = get_non_binlog_streams(
-        mssql_conn, catalog, config, state
+        db2_conn, catalog, config, state
     )
     for entry in non_binlog_catalog.streams:
         LOGGER.info(f"Need to sync {entry.table}")
-    sync_non_binlog_streams(mssql_conn, non_binlog_catalog, config, state)
+    sync_non_binlog_streams(db2_conn, non_binlog_catalog, config, state)
 
 
-def log_server_params(mssql_conn):
-    with mssql_conn.connect() as open_conn:
+def log_server_params(db2_conn):
+    with db2_conn.connect() as open_conn:
+        #
+        # https://stackoverflow.com/questions/3821795/how-to-check-db2-version
+        # two approaches possible - TABLE(sysproc.env_get_inst_info())
+        #                      or - SYSIBMADM.ENV_INST_INFO
+        server_parameters=[
+                'INST_NAME',
+                'IS_INST_PARTITIONABLE',
+                'NUM_DBPARTITIONS',
+                'INST_PTR_SIZE',
+                'RELEASE_NUM',
+                'SERVICE_LEVEL',
+                'BLD_LEVEL',
+                'PTF',
+                'FIXPACK_NUM',
+                'NUM_MEMBERS'
+                ]
         try:
             row = open_conn.execute(
                 """
-                SELECT
-                    @@VERSION as version,
-                    @@lock_timeout as lock_wait_timeout
-                """
+                   SELECT {} FROM SYSIBMADM.ENV_INST_INFO
+                """.format(','.join(server_parameters))
             )
             LOGGER.info(
-                "Server Parameters: " + "version: %s, " + "lock_timeout: %s, ",
+                    "Server Parameters: " + ', '.join([p+': %s' for p in server_parameters]),
                 *row.fetchone(),
             )
         except Exception as e:
@@ -727,18 +826,18 @@ def log_server_params(mssql_conn):
 
 def main_impl():
     args = utils.parse_args(REQUIRED_CONFIG_KEYS)
-    mssql_conn = get_azure_sql_engine(args.config)
-    log_server_params(mssql_conn)
+    db2_conn = get_db2_sql_engine(args.config)
+    log_server_params(db2_conn)
 
     if args.discover:
-        do_discover(mssql_conn, args.config)
+        do_discover(db2_conn, args.config)
     elif args.catalog:
         state = args.state or {}
-        do_sync(mssql_conn, args.config, args.catalog, state)
+        do_sync(db2_conn, args.config, args.catalog, state)
     elif args.properties:
         catalog = Catalog.from_dict(args.properties)
         state = args.state or {}
-        do_sync(mssql_conn, args.config, catalog, state)
+        do_sync(db2_conn, args.config, catalog, state)
     else:
         LOGGER.info("No properties were selected")
 

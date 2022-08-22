@@ -1,12 +1,11 @@
 import os
-import pymysql
 import singer
-import tap_mysql
-import tap_mysql.sync_strategies.common as common
-from tap_mysql.connection import MySQLConnection
+import tap_db2
+import tap_db2.sync_strategies.common as common
+from tap_db2.connection import get_db2_sql_engine
 
-DB_NAME = "tap_mysql_test"
-
+def display_config():
+    print(args)
 
 def get_db_config():
     config = {}
@@ -22,25 +21,10 @@ def get_db_config():
 
 
 def get_test_connection():
+    """
+    Connects to DB2 and returns the connection object
+    """
     db_config = get_db_config()
-
-    con = pymysql.connect(**db_config)
-
-    try:
-        with con.cursor() as cur:
-            try:
-                cur.execute("DROP DATABASE {}".format(DB_NAME))
-            except:
-                pass
-            cur.execute("CREATE DATABASE {}".format(DB_NAME))
-    finally:
-        con.close()
-
-    db_config["database"] = DB_NAME
-    db_config["autocommit"] = True
-
-    mysql_conn = MySQLConnection(db_config)
-    mysql_conn.autocommit_mode = True
 
     return mysql_conn
 
