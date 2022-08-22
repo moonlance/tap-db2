@@ -161,6 +161,9 @@ def schema_for_column(c,config):
         result.minimum = 0 - 2 ** (bits - 1)
         result.maximum = 2 ** (bits - 1) - 1
 
+    # NB: Due to scale and precision variations among numeric types,
+    #     we're using a custom `singer.decimal` string formatter 
+    #     for this, with no opinion on scale/precision.
     elif data_type in FLOAT_TYPE_EXPONENT:
         if use_singer_decimal:
             result.type = ["null","string"]
@@ -171,7 +174,11 @@ def schema_for_column(c,config):
             if c.character_maximum_length == 8 and data_type == 'decfloat':
                 LOGGER.warning(f"DECFLOAT(16) - (length=8) - values > 10^16 are not handled correctly (table={c.table_name} column={c.column_name})")
             result.multipleOf = 10 ** (0 - (c.numeric_scale or FLOAT_TYPE_EXPONENT[data_type]*-1))
-
+    
+    # NB: Scale and precision can be obtained from the dictionary views on DB2
+    #     it is useful for the target/loader to be able to access this info
+    #     specifically for decimal types so it can use the values as provided
+    #     it is difficult to determine scale/precision from the singer multipleOf attribute
     elif data_type in DECIMAL_TYPES:
         if use_singer_decimal:
             result.type = ["null","number"]
