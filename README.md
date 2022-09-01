@@ -76,6 +76,44 @@ Create a config file containing the database connection credentials, e.g.:
 These are the same basic configuration properties used by the mssql command-line
 client (`mssql`).
 
+Optional:
+
+To emit all numeric values as strings and treat floats as string data types for the target, set use_singer_decimal to true. The resulting SCHEMA message will contain an attribute in additionalProperties containing the scale and precision of the discovered property:
+
+#### SCHEMA message
+```json
+"property": {
+            "inclusion": "available",
+            "format": "singer.decimal",
+            "type": [
+              "null",
+              "number"
+            ],
+            "additionalProperties": {
+              "scale_precision": "(12,0)"
+            }
+```
+
+Usage:
+```json
+{
+  "use_singer_decimal": true
+}
+```
+
+Optional:
+
+To avoid problems with uncommitted changes being read, you can set `offset_value` to add to the value found in the STATE for INCREMENTAL loads. If the value provided is for a datetime replication key then the `offset_value` is read as seconds to offset by, otherwise the value is used as provided.
+
+Using offset_value would result in an overlapping set of records being read each time the tap is run.
+
+Usage (offsetting by -ve 3 hours):
+```json
+{
+  "offset_value": -10800
+}
+```
+
 ### Discovery mode
 
 The tap can be invoked in discovery mode to find the available tables and
