@@ -5,6 +5,7 @@ import itertools
 # from itertools import dropwhile
 # import json
 import logging
+import os
 import copy
 
 # import uuid
@@ -27,8 +28,8 @@ import tap_db2.sync_strategies.logical as logical
 from tap_db2.connection import (
     # connect_with_backoff,
     get_db2_sql_engine,
+    ARRAYSIZE
 )
-
 
 Column = collections.namedtuple(
     "Column",
@@ -53,7 +54,10 @@ REQUIRED_CONFIG_KEYS = [
 
 LOGGER = singer.get_logger()
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+if 'LOGGING_CONF_FILE' in os.environ and os.environ['LOGGING_CONF_FILE']:
+    path = os.environ['LOGGING_CONF_FILE']
+    logging.config.fileConfig(path, disable_existing_loggers=False)
+#logger.setLevel(logging.INFO)
 
 # Define data types
 
@@ -251,6 +255,7 @@ def create_column_metadata(cols, config):
 
 
 def discover_catalog(db2_conn, config):
+    
     """Returns a Catalog describing the structure of the database."""
     LOGGER.info("Preparing Catalog")
 
@@ -317,11 +322,13 @@ def discover_catalog(db2_conn, config):
             """
         )
         columns = []
-        rec = column_results.fetchone()
-        LOGGER.info(rec)
-        while rec is not None:
-            columns.append(Column(*rec))
-            rec = column_results.fetchone()
+        LOGGER.info(f"{connection.ARRAYSIZE=}")
+        rec = column_results.fetchmany(connection.ARRAYSIZE)
+        LOGGER.debug(f"{rec=}")
+        while len(rec) > 0:
+            for r in rec:
+                columns.append(Column(*r))
+            rec = column_results.fetchmany(connection.ARRAYSIZE)
         LOGGER.info("Columns Fetched")
         entries = []
         for (k, cols) in itertools.groupby(
