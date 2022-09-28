@@ -28,8 +28,9 @@ import tap_db2.sync_strategies.logical as logical
 from tap_db2.connection import (
     # connect_with_backoff,
     get_db2_sql_engine,
-    ARRAYSIZE
 )
+
+ARRAYSIZE = 1
 
 Column = collections.namedtuple(
     "Column",
@@ -322,13 +323,13 @@ def discover_catalog(db2_conn, config):
             """
         )
         columns = []
-        LOGGER.info(f"{connection.ARRAYSIZE=}")
-        rec = column_results.fetchmany(connection.ARRAYSIZE)
+        LOGGER.info(f"{ARRAYSIZE=}")
+        rec = column_results.fetchmany(ARRAYSIZE)
         LOGGER.debug(f"{rec=}")
         while len(rec) > 0:
             for r in rec:
                 columns.append(Column(*r))
-            rec = column_results.fetchmany(connection.ARRAYSIZE)
+            rec = column_results.fetchmany(ARRAYSIZE)
         LOGGER.info("Columns Fetched")
         entries = []
         for (k, cols) in itertools.groupby(
@@ -832,9 +833,15 @@ def log_server_params(db2_conn):
 
 
 def main_impl():
+    
+    global ARRAYSIZE
     args = utils.parse_args(REQUIRED_CONFIG_KEYS)
     db2_conn = get_db2_sql_engine(args.config)
     log_server_params(db2_conn)
+    
+    # Set ARRAYSIZE here
+    ARRAYSIZE = args.config.get('cursor_array_size',1)
+    common.ARRAYSIZE = ARRAYSIZE
 
     if args.discover:
         do_discover(db2_conn, args.config)

@@ -12,7 +12,6 @@ import singer
 
 # from urllib.parse import quote_plus
 LOGGER = singer.get_logger()
-ARRAYSIZE = 1
 
 @backoff.on_exception(backoff.expo, pyodbc.Error, max_tries=5, factor=2)
 def connect_with_backoff(connection):
@@ -58,7 +57,6 @@ def revert_ouput_converter(conn, prev_converter):
 
 def get_db2_sql_engine(config) -> Engine:
     """Using parameters from the config to connect to DB2 using ibm_db_sa+pyodbc"""
-    global ARRAYSIZE
 
     # connection_string = "ibm_db_sa+pyodbc://db2inst1:*
     # @localhost:50000/TESTDB"
@@ -70,5 +68,5 @@ def get_db2_sql_engine(config) -> Engine:
         config["database"],
     )
     engine = create_engine(connection_string)
-    ARRAYSIZE = config.get("cursor_array_size",1)
+
     return engine
