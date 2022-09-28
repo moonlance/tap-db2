@@ -201,6 +201,7 @@ def sync_query(
     )
 
     # query_string = cursor.mogrify(select_sql, params)
+    from tap_db2.connection import ARRAYSIZE
     
     time_extracted = utils.now()
     if len(params) == 0:
