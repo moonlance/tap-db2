@@ -70,5 +70,5 @@ def get_db2_sql_engine(config) -> Engine:
         config["database"],
     )
     engine = create_engine(connection_string)
-    ARRAYSIZE = config.get("arraysize",1)
+    ARRAYSIZE = config.get("cursor_array_size",1)
     return engine

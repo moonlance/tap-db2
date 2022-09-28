@@ -201,8 +201,7 @@ def sync_query(
     )
 
     # query_string = cursor.mogrify(select_sql, params)
-    from tap_db2.connection import ARRAYSIZE
-
+    
     time_extracted = utils.now()
     if len(params) == 0:
         results = cursor.execute(select_sql)
@@ -214,8 +213,8 @@ def sync_query(
     LOGGER.info(f"{ARRAYSIZE=}")
     rows = deque(results.fetchmany(ARRAYSIZE))
     
-    LOGGER.info(f"{rows[0]=}")
-    LOGGER.info(f"Start: {len(rows)=}")
+    LOGGER.debug(f"{rows[0]=}")
+    LOGGER.debug(f"Start: {len(rows)=}")
     
     database_name = get_database_name(catalog_entry)
     
