@@ -29,6 +29,7 @@ import tap_db2.sync_strategies.logical as logical
 from tap_db2.connection import (
     # connect_with_backoff,
     get_db2_sql_engine,
+    ResultIterator
 )
 
 ARRAYSIZE = 1
@@ -233,14 +234,6 @@ def schema_for_column(c,config):
             description="Unsupported column type",
         )
     return result
-
-def ResultIterator(cursor, arraysize=1):
-    while True:
-        results = cursor.fetchmany(arraysize)
-        if not results:
-            break
-        for result in results:
-            yield result
 
 def create_column_metadata(cols, config):
     mdata = {}
