@@ -237,10 +237,10 @@ def sync_query(
             md_map = metadata.to_map(catalog_entry.metadata)
             stream_metadata = md_map.get((), {})
             replication_method = stream_metadata.get("replication-method")
- 
+
             if replication_method in {"FULL_TABLE", "LOG_BASED"}:
                 key_properties = get_key_properties(catalog_entry)
- 
+
                 max_pk_values = singer.get_bookmark(
                     state, catalog_entry.tap_stream_id, "max_pk_values"
                 )
