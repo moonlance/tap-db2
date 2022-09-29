@@ -210,11 +210,9 @@ def sync_query(
         LOGGER.info(params["replication_key_value"])
         results = cursor.execute(select_sql, params["replication_key_value"])
     
-    
     LOGGER.info(f"{ARRAYSIZE=}")
-    
-    database_name = get_database_name(catalog_entry)
     rows_saved = 0
+    database_name = get_database_name(catalog_entry)
     
     with metrics.record_counter(None) as counter:
         counter.tags["database"] = database_name
