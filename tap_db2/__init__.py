@@ -1,5 +1,4 @@
 # import datetime
-from __future__ import generators
 import collections
 import itertools
 
