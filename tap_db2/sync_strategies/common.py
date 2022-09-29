@@ -213,7 +213,7 @@ def sync_query(
     LOGGER.info(f"{ARRAYSIZE=}")
     rows_saved = 0
     database_name = get_database_name(catalog_entry)
-    
+
     with metrics.record_counter(None) as counter:
         counter.tags["database"] = database_name
         counter.tags["table"] = catalog_entry.table
