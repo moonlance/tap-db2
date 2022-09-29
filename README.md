@@ -105,6 +105,18 @@ Usage (offsetting by -ve 3 hours):
 }
 ```
 
+Optional:
+
+To make use of fetchmany(x) instead of fetchone(), use cursor_array_size with an integer value inidicating the number of rows to pull. This can help in some architectures by pulling more rows into memory. The default if omitted is 1, the tap will still use fetchmany, but with an argument of 1, under the assumption that fetchmany(1) === fetchone().
+
+Usage:
+```json
+{
+  "cursor_array_size": 10000
+}
+```
+
+
 ### Discovery mode
 
 The tap can be invoked in discovery mode to find the available tables and

@@ -5,6 +5,7 @@ import itertools
 # from itertools import dropwhile
 # import json
 import logging
+import os
 import copy
 
 # import uuid
@@ -27,8 +28,10 @@ import tap_db2.sync_strategies.logical as logical
 from tap_db2.connection import (
     # connect_with_backoff,
     get_db2_sql_engine,
+    ResultIterator
 )
 
+ARRAYSIZE = 1
 
 Column = collections.namedtuple(
     "Column",
@@ -53,7 +56,10 @@ REQUIRED_CONFIG_KEYS = [
 
 LOGGER = singer.get_logger()
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+if 'LOGGING_CONF_FILE' in os.environ and os.environ['LOGGING_CONF_FILE']:
+    path = os.environ['LOGGING_CONF_FILE']
+    logging.config.fileConfig(path, disable_existing_loggers=False)
+#logger.setLevel(logging.INFO)
 
 # Define data types
 
@@ -228,7 +234,6 @@ def schema_for_column(c,config):
         )
     return result
 
-
 def create_column_metadata(cols, config):
     mdata = {}
     mdata = metadata.write(mdata, (), "selected-by-default", False)
@@ -251,6 +256,7 @@ def create_column_metadata(cols, config):
 
 
 def discover_catalog(db2_conn, config):
+    
     """Returns a Catalog describing the structure of the database."""
     LOGGER.info("Preparing Catalog")
 
@@ -317,11 +323,11 @@ def discover_catalog(db2_conn, config):
             """
         )
         columns = []
-        rec = column_results.fetchone()
-        LOGGER.info(rec)
-        while rec is not None:
-            columns.append(Column(*rec))
-            rec = column_results.fetchone()
+        LOGGER.info(f"{ARRAYSIZE=}")
+        
+        for r in ResultIterator(column_results, ARRAYSIZE):
+            columns.append(Column(*r))
+        
         LOGGER.info("Columns Fetched")
         entries = []
         for (k, cols) in itertools.groupby(
@@ -825,9 +831,15 @@ def log_server_params(db2_conn):
 
 
 def main_impl():
+    
+    global ARRAYSIZE
     args = utils.parse_args(REQUIRED_CONFIG_KEYS)
     db2_conn = get_db2_sql_engine(args.config)
     log_server_params(db2_conn)
+    
+    # Set ARRAYSIZE here
+    ARRAYSIZE = args.config.get('cursor_array_size',1)
+    common.ARRAYSIZE = ARRAYSIZE
 
     if args.discover:
         do_discover(db2_conn, args.config)
