@@ -1,4 +1,5 @@
 # import datetime
+from __future__ import generators
 import collections
 import itertools
 
@@ -233,6 +234,13 @@ def schema_for_column(c,config):
         )
     return result
 
+def ResultIterator(cursor, arraysize=1):
+    while True:
+        results = cursor.fetchmany(arraysize)
+        if not results:
+            break
+        for result in results:
+            yield result
 
 def create_column_metadata(cols, config):
     mdata = {}
@@ -324,12 +332,10 @@ def discover_catalog(db2_conn, config):
         )
         columns = []
         LOGGER.info(f"{ARRAYSIZE=}")
-        rec = column_results.fetchmany(ARRAYSIZE)
-        LOGGER.debug(f"{rec=}")
-        while len(rec) > 0:
-            for r in rec:
-                columns.append(Column(*r))
-            rec = column_results.fetchmany(ARRAYSIZE)
+        
+        for r in ResultIterator(column_results, ARRAYSIZE):
+            columns.append(Column(*r))
+        
         LOGGER.info("Columns Fetched")
         entries = []
         for (k, cols) in itertools.groupby(
