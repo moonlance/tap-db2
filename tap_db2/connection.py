@@ -70,3 +70,11 @@ def get_db2_sql_engine(config) -> Engine:
     engine = create_engine(connection_string)
 
     return engine
+
+def ResultIterator(cursor, arraysize=1):
+    while True:
+        results = cursor.fetchmany(arraysize)
+        if not results:
+            break
+        for result in results:
+            yield result
