@@ -28,8 +28,10 @@ import tap_db2.sync_strategies.logical as logical
 from tap_db2.connection import (
     # connect_with_backoff,
     get_db2_sql_engine,
-    ResultIterator
+    ResultIterator,
 )
+
+from sqlalchemy.exc import ProgrammingError
 
 ARRAYSIZE = 1
 
@@ -810,8 +812,7 @@ def log_server_params(db2_conn):
                 'SERVICE_LEVEL',
                 'BLD_LEVEL',
                 'PTF',
-                'FIXPACK_NUM',
-                'NUM_MEMBERS'
+                'FIXPACK_NUM'
                 ]
         try:
             row = open_conn.execute(
@@ -819,14 +820,20 @@ def log_server_params(db2_conn):
                    SELECT {} FROM SYSIBMADM.ENV_INST_INFO
                 """.format(','.join(server_parameters))
             )
-            LOGGER.info(
-                    "Server Parameters: " + ', '.join([p+': %s' for p in server_parameters]),
-                *row.fetchone(),
+        except ProgrammingError:
+            row = open_conn.execute(
+                """
+                   SELECT {} FROM TABLE (sysproc.env_get_inst_info()) as instanceinfo
+                """.format(','.join(server_parameters))
             )
         except Exception as e:
             LOGGER.warning(
                 "Encountered error checking server params. Error: (%s) %s",
                 *e.args,
+            )
+        LOGGER.info(
+                    "Server Parameters: " + ', '.join([p+': %s' for p in server_parameters]),
+                *row.fetchone(),
             )
 
 
