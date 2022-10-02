@@ -6,7 +6,7 @@ setup(
     name="tap-db2",
     version="1.0.1",
     description="Tap for extracting data from an IBM DB2 database",
-    author="Mark Johnston",
+    author="Mark Johnston, Tom Sloman",
     url="TO-DO",
     classifiers=[
         # "License :: OSI Approved :: GNU Affero General Public License v3",
