@@ -4,9 +4,9 @@ from setuptools import setup
 
 setup(
     name="tap-db2",
-    version="1.0.0",
+    version="1.0.1",
     description="Tap for extracting data from an IBM DB2 database",
-    author="Tom Sloman",
+    author="Mark Johnston",
     url="TO-DO",
     classifiers=[
         # "License :: OSI Approved :: GNU Affero General Public License v3",
