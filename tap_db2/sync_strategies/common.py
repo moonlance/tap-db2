@@ -161,7 +161,10 @@ def row_to_singer_record(
             row_to_persist += (str(elem),)
         
         elif property_format == 'singer.decimal':
-            row_to_persist += (str(elem),)
+            if elem is None:
+                row_to_persist += (elem,)
+            else:
+                row_to_persist += (str(elem),)
             
         else:
             row_to_persist += (elem,)
