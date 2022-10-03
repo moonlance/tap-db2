@@ -437,7 +437,7 @@ def desired_columns(selected, table_schema):
     return selected.intersection(available).union(automatic)
 
 
-def is_valid_currently_syncing_stream(selected_stream, state):
+def is_valid__syncing_stream(selected_stream, state):
     return True
 
 
@@ -522,15 +522,9 @@ def get_non_binlog_streams(db2_conn, catalog, config, state):
 
     for stream in selected_streams:
         stream_metadata = metadata.to_map(stream.metadata)
-        # if stream_metadata.table in ["aagaggpercols", "aagaggdef"]:
+        
         for k, v in stream_metadata.get((), {}).items():
             LOGGER.info(f"{k}: {v}")
-            # LOGGER.info(stream_metadata.get((), {}).get(
-            #   "table-key-properties"
-            # ))
-        # replication_method = stream_metadata.get((), {}).get(
-        #     "replication-method"
-        # )
         stream_state = state.get("bookmarks", {}).get(stream.tap_stream_id)
 
         if not stream_state:
@@ -551,7 +545,7 @@ def get_non_binlog_streams(db2_conn, catalog, config, state):
             filter(
                 lambda s: s.tap_stream_id == currently_syncing
                 and is_valid_currently_syncing_stream(s, state),
-                streams_with_state,
+                ordered_streams,
             )
         )
 
