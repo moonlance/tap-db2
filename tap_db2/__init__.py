@@ -437,7 +437,7 @@ def desired_columns(selected, table_schema):
     return selected.intersection(available).union(automatic)
 
 
-def is_valid__syncing_stream(selected_stream, state):
+def is_valid_currently_syncing_stream(selected_stream, state):
     return True
 
 
