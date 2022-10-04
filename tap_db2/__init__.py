@@ -508,60 +508,33 @@ def get_non_binlog_streams(db2_conn, catalog, config, state):
     keys) will be included. Streams will be prioritized in the following order:
       1. currently_syncing if it is SELECT-based
       2. any streams that do not have state
-      3. any streams that do not have a replication method of LOG_BASED
+      3. any remaining streams
+    Modify the stream_ordering function to change behaviour
 
     """
     discovered = discover_catalog(db2_conn, config)
 
-    # Filter catalog to include only selected streams
-    selected_streams = list(
-        filter(lambda s: common.stream_is_selected(s), catalog.streams)
-    )
-    streams_with_state = []
-    streams_without_state = []
-
-    for stream in selected_streams:
-        stream_metadata = metadata.to_map(stream.metadata)
-        
-        for k, v in stream_metadata.get((), {}).items():
-            LOGGER.info(f"{k}: {v}")
-        stream_state = state.get("bookmarks", {}).get(stream.tap_stream_id)
-
-        if not stream_state:
-            streams_without_state.append(stream)
-        else:
-            streams_with_state.append(stream)
-
-    # If the state says we were in the middle of processing a stream, skip
-    # to that stream. Then process streams without prior state and finally
-    # move onto streams with state (i.e. have been synced in the past)
     currently_syncing = singer.get_currently_syncing(state)
 
-    # prioritize streams that have not been processed
-    ordered_streams = streams_without_state + streams_with_state
+    # Define a function which returns an ordering integer to use in sorted()
+    def stream_ordering(stream):
+        if stream.tap_stream_id == currently_syncing: 
+            LOGGER.debug(f"{stream.tap_stream_id} is currently_syncing: ordering is 0")
+            return 0
+        elif not(state.get("bookmarks",{}).get(stream.tap_stream_id)):
+            LOGGER.debug(f"{stream.tap_stream_id} does not have a state: ordering is 1")
+            return 1
+        else: 
+            LOGGER.debug(f"{stream.tap_stream_id} does have a state: ordering is 2")
+            return 2
 
-    if currently_syncing:
-        currently_syncing_stream = list(
-            filter(
-                lambda s: s.tap_stream_id == currently_syncing
-                and is_valid_currently_syncing_stream(s, state),
-                ordered_streams,
-            )
+    # Filter the catalog by those selected and then order by the ordering function
+    streams_to_sync = sorted(
+        [s for s in catalog.streams if common.stream_is_selected(s)],
+        key=lambda s:stream_ordering(s)
         )
 
-        non_currently_syncing_streams = list(
-            filter(
-                lambda s: s.tap_stream_id != currently_syncing, ordered_streams
-            )
-        )
-
-        streams_to_sync = (
-            currently_syncing_stream + non_currently_syncing_streams
-        )
-    else:
-        # prioritize streams that have not been processed
-        streams_to_sync = ordered_streams
-
+    # Finally ensure the the streams are in the freshly-discovered catalog
     return resolve_catalog(discovered, streams_to_sync)
 
 
