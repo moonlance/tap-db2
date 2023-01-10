@@ -15,7 +15,7 @@ setup(
     py_modules=["tap_db2"],
     install_requires=[
         "attrs==22.2.0",
-        "backoff==1.8.0",
+        "backoff==2.2.1",
         "ibm-db-sa==0.3.8",
         "ibm-db==3.1.4",
         "jinja2==3.1.2",
