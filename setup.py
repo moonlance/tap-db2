@@ -20,7 +20,7 @@ setup(
         "ibm-db==3.1.4",
         "jinja2==3.1.2",
         "markupsafe<2.1.0",
-        "pendulum==1.2.0",
+        "pendulum==2.1.2",
         "pyodbc==4.0.26",
         "pytz>=2018.1",
         "singer-python>=5.12.0",
