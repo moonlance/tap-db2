@@ -19,7 +19,7 @@ setup(
         "ibm-db-sa==0.3.8",
         "ibm-db==3.1.4",
         "jinja2==3.1.2",
-        "markupsafe<2.1.0",
+        "markupsafe<2.2.0",
         "pendulum==1.2.0",
         "pyodbc==4.0.26",
         "pytz>=2018.1",
