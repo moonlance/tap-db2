@@ -21,7 +21,7 @@ setup(
         "jinja2==3.1.2",
         "markupsafe<2.2.0",
         "pendulum==1.2.0",
-        "pyodbc==4.0.26",
+        "pyodbc==4.0.35",
         "pytz>=2018.1",
         "singer-python>=5.12.0",
         "sqlalchemy<2.0.0",
