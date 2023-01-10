@@ -18,7 +18,7 @@ setup(
         "backoff==1.8.0",
         "ibm-db-sa==0.3.8",
         "ibm-db==3.1.4",
-        "jinja2==2.11.3",
+        "jinja2==3.1.2",
         "markupsafe<2.1.0",
         "pendulum==1.2.0",
         "pyodbc==4.0.26",
