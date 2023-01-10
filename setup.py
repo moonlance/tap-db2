@@ -17,7 +17,7 @@ setup(
         "attrs==21.4.0",
         "backoff==1.8.0",
         "ibm-db-sa==0.3.8",
-        "ibm-db==3.1.1",
+        "ibm-db==3.1.4",
         "jinja2==2.11.3",
         "markupsafe<2.1.0",
         "pendulum==1.2.0",
