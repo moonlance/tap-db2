@@ -16,7 +16,7 @@ setup(
     install_requires=[
         "attrs==21.4.0",
         "backoff==1.8.0",
-        "ibm-db-sa==0.3.7",
+        "ibm-db-sa==0.3.8",
         "ibm-db==3.1.1",
         "jinja2==2.11.3",
         "markupsafe<2.1.0",
